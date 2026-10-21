@@ -379,6 +379,16 @@ func options(s *session, cmd proto.Command) (caps.UpdateOptions, error) {
 	return opt, nil
 }
 
+// stackFiles opens a deploy's sealed files: {"compose": "…", "env": "…"}.
+func stackFiles(s *session, cmd proto.Command) (map[string]string, error) {
+	text, err := proto.UnsealMax(s.key, s.sid, cmd.Cmd, cmd.Files.Nonce, cmd.Files.Box, proto.MaxSealedFiles)
+	var files map[string]string
+	if err != nil || json.Unmarshal([]byte(text), &files) != nil {
+		return nil, errors.New("the files do not open")
+	}
+	return files, nil
+}
+
 // loop runs until the connection ends: frames from labhud, the state, the pings.
 func (a *Agent) loop(ctx context.Context, s *session) error {
 	ctx, cancel := context.WithCancelCause(ctx)
@@ -524,8 +534,23 @@ func (a *Agent) run(ctx context.Context, s *session, cmd proto.Command) {
 		if !mu.TryLock() {
 			err = errors.New("already running")
 		} else {
-			cctx, cancel := context.WithTimeout(ctx, a.CommandWait)
-			if rd, ok := target.(caps.Reader); ok && rd.Reads(cmd.Verb) {
+			wait := a.CommandWait
+			if sl, ok := target.(caps.Slow); ok && sl.Timeout(cmd.Verb) > 0 {
+				wait = sl.Timeout(cmd.Verb)
+			}
+			cctx, cancel := context.WithTimeout(ctx, wait)
+			if dp, ok := target.(caps.Deployer); ok && cmd.Files != nil {
+				var out string
+				if files, ferr := stackFiles(s, cmd); ferr != nil {
+					err = ferr
+				} else {
+					out, err = dp.Deploy(cctx, cmd.Verb, cmd.Target, files)
+				}
+				if len(out) > caps.MaxOutput {
+					out = out[len(out)-caps.MaxOutput:]
+				}
+				res.Output = out
+			} else if rd, ok := target.(caps.Reader); ok && rd.Reads(cmd.Verb) {
 				var out string
 				out, err = rd.Read(cctx, cmd.Verb, cmd.Target)
 				if len(out) > caps.MaxOutput {

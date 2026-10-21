@@ -19,6 +19,7 @@ import (
 	"github.com/Mithrandler/labhud-agent/internal/caps/pve"
 	"github.com/Mithrandler/labhud-agent/internal/caps/scan"
 	"github.com/Mithrandler/labhud-agent/internal/caps/sensors"
+	"github.com/Mithrandler/labhud-agent/internal/caps/stacks"
 	"github.com/Mithrandler/labhud-agent/internal/caps/systemd"
 	"github.com/Mithrandler/labhud-agent/internal/caps/wol"
 	"github.com/Mithrandler/labhud-agent/internal/config"
@@ -93,6 +94,13 @@ func detect(ctx context.Context, cfg config.Config, agent *conn.Agent, logger *l
 			systemd.NewHost(bus, cfg.Root, agent.Emit))
 	} else {
 		logger.Print("no D-Bus: no systemd or host capability (mount /run/dbus in a container)")
+	}
+	if cfg.Stacks != "" {
+		if st := stacks.New(cfg.Stacks, nil); st != nil {
+			found = append(found, st)
+		} else {
+			logger.Print("LABHUD_AGENT_STACKS is set but there is no `docker compose` here (or the folder is not writable): no stacks")
+		}
 	}
 	found = append(found, wol.New(cfg.Root))
 	if p := pve.New(cfg.PVEURL, cfg.PVEToken, cfg.Root); p != nil {

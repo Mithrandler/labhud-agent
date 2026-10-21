@@ -364,3 +364,73 @@ func TestUpdate(t *testing.T) {
 		t.Errorf("binary is %q", b)
 	}
 }
+
+// stackCap is a stacks capability that records the files it was given.
+type stackCap struct {
+	files map[string]string
+	verb  string
+}
+
+func (c *stackCap) Name() string                                        { return "stacks" }
+func (c *stackCap) Fill(context.Context, *proto.State)                  {}
+func (c *stackCap) Do(context.Context, string, string) error            { return nil }
+func (c *stackCap) Reads(verb string) bool                              { return true }
+func (c *stackCap) Timeout(string) time.Duration                        { return time.Minute }
+func (c *stackCap) Read(_ context.Context, v, t string) (string, error) { return "read " + v, nil }
+func (c *stackCap) Deploy(_ context.Context, verb, target string, files map[string]string) (string, error) {
+	c.files, c.verb = files, verb
+	return "deployed " + target, nil
+}
+
+func TestSealedStackFiles(t *testing.T) {
+	cap := &stackCap{}
+	results := make(chan proto.Result, 3)
+	f := &fakeLabhud{t: t, allow: proto.Allow{Caps: []string{"stacks"}, Targets: map[string][]string{"stacks": {"web"}}}}
+	f.script = func(s *srvSession) {
+		nonce := strings.Repeat("ab", 16)
+		seal := func(cmd, text string) *proto.SealedFiles {
+			box, err := proto.SealMax(s.key, s.sid, cmd, nonce, text, proto.MaxSealedFiles)
+			if err != nil {
+				t.Error(err)
+			}
+			return &proto.SealedFiles{Nonce: nonce, Box: box}
+		}
+		for i, cmd := range []proto.Command{
+			{Cap: "stacks", Verb: "deploy", Target: "web", Files: seal("0000000000000000", `{"compose":"services: {}","env":"A=1"}`)},
+			// sealed for another command: it does not open
+			{Cap: "stacks", Verb: "deploy", Target: "web", Files: seal("9999999999999999", `{"compose":"x"}`)},
+			{Cap: "stacks", Verb: "down", Target: "web"},
+		} {
+			cmd.Type, cmd.Cmd = "command", strings.Repeat(string(rune('0'+i)), 16)
+			s.send(cmd)
+			fr, err := s.read()
+			if err != nil {
+				t.Errorf("reading a result: %v", err)
+				return
+			}
+			var r proto.Result
+			json.Unmarshal(fr.Body, &r)
+			results <- r
+		}
+		s.send(proto.Bye{Type: "bye", Reason: "removed"})
+		time.Sleep(200 * time.Millisecond)
+	}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	a := newAgent(t, srv.URL, cap)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := a.Run(ctx); !errors.Is(err, ErrRemoved) {
+		t.Fatalf("Run: %v", err)
+	}
+	r := <-results
+	if !r.OK || r.Output != "deployed web" || cap.files["compose"] != "services: {}" || cap.files["env"] != "A=1" {
+		t.Errorf("deploy: %+v, files %v", r, cap.files)
+	}
+	if r := <-results; r.OK || r.Error != "the files do not open" {
+		t.Errorf("a box sealed for another command: %+v", r)
+	}
+	if r := <-results; !r.OK || r.Output != "read down" {
+		t.Errorf("down: %+v", r)
+	}
+}

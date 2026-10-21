@@ -18,6 +18,7 @@ var Verbs = map[string][]string{
 	"systemd": {"start", "stop", "restart"},
 	"host":    {"reboot", "shutdown", "update"},
 	"wol":     {"wake"},
+	"stacks":  {"deploy", "redeploy", "restart", "down", "show"},
 	"pve":     {"start", "shutdown", "reboot"},
 	"ptero":   {"start", "stop", "restart"},
 }
@@ -28,6 +29,7 @@ var Target = map[string]*regexp.Regexp{
 	"systemd": regexp.MustCompile(`^[A-Za-z0-9:_.@-]{1,250}\.(service|timer|socket|target|mount|path)$`),
 	"host":    regexp.MustCompile(`^host$`),
 	"wol":     regexp.MustCompile(`^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`),
+	"stacks":  regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`),
 	"pve":     regexp.MustCompile(`^[1-9][0-9]{2,8}$`),
 	"ptero":   regexp.MustCompile(`^[0-9a-f]{8}$`),
 }

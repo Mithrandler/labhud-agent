@@ -60,7 +60,9 @@ type State struct {
 	Units      map[string]map[string]any `json:"units,omitempty"`
 	Servers    map[string]map[string]any `json:"servers,omitempty"`
 	Neighbours map[string]map[string]any `json:"neighbours,omitempty"`
-	Node       string                    `json:"node,omitempty"` // the Proxmox node, with guests
+	// Stacks: the compose projects labhud keeps on this host (the stacks capability)
+	Stacks map[string]map[string]any `json:"stacks,omitempty"`
+	Node   string                    `json:"node,omitempty"` // the Proxmox node, with guests
 	// FailedUnits: every systemd unit in the failed state, of any type, ticked or not (null
 	// without systemd, [] when none failed)
 	FailedUnits []string `json:"failed_units"`
@@ -110,6 +112,14 @@ type Command struct {
 	// HoldCritical: a docker update labhud starts on its own, with "hold back an update with new
 	// critical CVEs": the new image is scanned first and kept out if it has more than the old one
 	HoldCritical bool `json:"hold_critical,omitempty"`
+	// Files: a stack deploy's files, sealed (MaxSealedFiles): {"compose": "…", "env": "…"}
+	Files *SealedFiles `json:"files,omitempty"`
+}
+
+// SealedFiles: the files of a stack, sealed, with the nonce they were sealed with.
+type SealedFiles struct {
+	Nonce string `json:"nonce"`
+	Box   string `json:"box"`
 }
 
 // SealedAuth: the registry in clear (to check against the image before anything), the login sealed.

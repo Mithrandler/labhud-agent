@@ -30,6 +30,7 @@ type Config struct {
 	PteroURL string  // LABHUD_PTERO_URL: the panel
 	PteroKey string  // LABHUD_PTERO_KEY: a client API key
 	PteroPin string  // LABHUD_PTERO_PIN: SHA-256 of the panel's certificate, for a self-signed one
+	Stacks   string  // LABHUD_AGENT_STACKS: the folder of the compose stacks labhud deploys (off when empty)
 	Releases string  // LABHUD_AGENT_RELEASES: where updates come from (selfupdate.Releases when empty)
 	// LABHUD_AGENT_AUTO_LABELS: "k=v,k2=v2", labels a container gets when it is made again while
 	// labhud updates it on its own (and loses when it no longer does), e.g. dockhand.update=false
@@ -109,7 +110,7 @@ func Load(dir string) (Config, error) {
 		PVEURL: get("LABHUD_PVE_URL", "https://localhost:8006"), PVEToken: get("LABHUD_PVE_TOKEN", ""),
 		PteroURL: strings.TrimRight(get("LABHUD_PTERO_URL", ""), "/"), PteroKey: get("LABHUD_PTERO_KEY", ""),
 		PteroPin: strings.ToLower(strings.ReplaceAll(get("LABHUD_PTERO_PIN", ""), ":", "")),
-		Releases: get("LABHUD_AGENT_RELEASES", ""), AutoLabels: labels(get("LABHUD_AGENT_AUTO_LABELS", "")),
+		Releases: get("LABHUD_AGENT_RELEASES", ""), Stacks: get("LABHUD_AGENT_STACKS", ""), AutoLabels: labels(get("LABHUD_AGENT_AUTO_LABELS", "")),
 	}, nil
 }
 

@@ -5,6 +5,7 @@ package caps
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/Mithrandler/labhud-agent/internal/proto"
 )
@@ -41,4 +42,15 @@ type UpdateOptions struct {
 // Updater is a capability whose update takes UpdateOptions (docker).
 type Updater interface {
 	UpdateWith(target string, opt UpdateOptions) error
+}
+
+// Slow is a capability whose verbs take longer than a command usually may (a compose pull).
+type Slow interface {
+	Timeout(verb string) time.Duration
+}
+
+// Deployer is a capability that takes files with a verb (stacks: deploy): the answer is the
+// output, as a Reader's.
+type Deployer interface {
+	Deploy(ctx context.Context, verb, target string, files map[string]string) (string, error)
 }

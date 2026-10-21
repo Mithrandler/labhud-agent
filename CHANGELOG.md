@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Stacks (compose)**, off unless `LABHUD_AGENT_STACKS=<folder>` is set and the host has `docker compose`
+  (or `docker-compose`): the capability `stacks`, a folder per stack holding `compose.yaml` and an optional
+  `.env`. Verbs: `deploy` (the files arrive sealed, up to 64 KiB, are written with mode 0600, checked with
+  `compose config` in a scratch folder first, then `up -d --remove-orphans`; a broken file leaves the old
+  one), `redeploy` (pull, then up), `restart`, `down` (never removes volumes) and `show` (the file, the
+  `.env` by name only). It is the one capability that runs a program: the program is found once at start,
+  the arguments are built in the agent, no shell, an environment of five variables. A compose file can ask
+  for what the Docker socket can, so ticking it is as strong as that. Not for the container image (it has
+  no docker CLI): use the service install.
 - **The host's Docker, whole**: on the target `images` (ticked like a container), the read verb `inventory`
   lists the images (size, tags, containers using each, untagged), the volumes (size, users, anonymous or
   named) and the networks (containers on each), the biggest first, at most 100 of each. New cleaning

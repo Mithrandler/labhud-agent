@@ -20,8 +20,11 @@ import (
 // The frame's signature covers the box, so it cannot be changed unseen. labhud's agentproto.py
 // does the same; the vectors pin it.
 
-// MaxSealed bounds a sealed text, in bytes.
+// MaxSealed bounds a sealed text, in bytes (a registry login).
 const MaxSealed = 4096
+
+// MaxSealedFiles bounds the sealed files of a stack deploy (a compose file and its .env).
+const MaxSealedFiles = 64 << 10
 
 func keystream(key, session, cmd, nonce string, n int) []byte {
 	k := []byte(mac(key, V+"|seal|"+session+"|"+cmd+"|"+nonce))
@@ -44,7 +47,12 @@ func xor(a, b []byte) []byte {
 
 // Seal is labhud's side, here for the tests.
 func Seal(key, session, cmd, nonce, text string) (string, error) {
-	if len(text) > MaxSealed {
+	return SealMax(key, session, cmd, nonce, text, MaxSealed)
+}
+
+// SealMax is Seal with another bound.
+func SealMax(key, session, cmd, nonce, text string, max int) (string, error) {
+	if len(text) > max {
 		return "", errors.New("too long to seal")
 	}
 	if !hex16.MatchString(nonce) {
@@ -55,7 +63,12 @@ func Seal(key, session, cmd, nonce, text string) (string, error) {
 
 // Unseal gives a sealed text back.
 func Unseal(key, session, cmd, nonce, box string) (string, error) {
-	if !hex16.MatchString(nonce) || len(box) > 2*MaxSealed || strings.ToLower(box) != box {
+	return UnsealMax(key, session, cmd, nonce, box, MaxSealed)
+}
+
+// UnsealMax is Unseal with another bound.
+func UnsealMax(key, session, cmd, nonce, box string, max int) (string, error) {
+	if !hex16.MatchString(nonce) || len(box) > 2*max || strings.ToLower(box) != box {
 		return "", errors.New("not a sealed value")
 	}
 	raw, err := hex.DecodeString(box)
