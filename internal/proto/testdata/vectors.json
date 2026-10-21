@@ -1,0 +1,208 @@
+{
+  "_": "Shared by labhud (tests/test_agentproto.py) and labhud-agent (internal/proto). Do not edit by hand: regenerate with both implementations and compare.",
+  "code": "Zm9vYmFyYmF6cXV4MTIzNDU2",
+  "session": "00112233445566778899aabbccddeeff",
+  "agent_id": "a1b2c3d4",
+  "agent_nonce": "0f0e0d0c0b0a09080706050403020100",
+  "server_nonce": "ffeeddccbbaa99887766554433221100",
+  "tls_fp": "3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f",
+  "code_id": "c8fa392a8ccc6883abb3ec636359175325eac584302ee190a1b2588f8f6c6888",
+  "pair_secret": "0edcbff2b89e33126a243e77f1fd848e16ea7508e85642fb485f3265e730d56a",
+  "server_proof": "f5ae80f9fe439c5fd228df0bc040a5b92191571683c80b72038a479b609ee7fc",
+  "server_proof_no_tls": "81dada574f45526bac06836e5cb1bbb11158c3a1db487dcdbc53fd2b849d2f92",
+  "key": "2a59b3bee8400cc67b59fda16a0adbcd8943cbe0e30add164ac43417c46a3738",
+  "frames": [
+    {
+      "direction": "a2l",
+      "seq": 1,
+      "t": 1760000000,
+      "message": {
+        "type": "hello",
+        "version": "0.1.0",
+        "caps": [
+          "docker",
+          "systemd"
+        ]
+      },
+      "frame": "{\"id\":\"a1b2c3d4\",\"seq\":1,\"t\":1760000000,\"body\":\"{\\\"type\\\":\\\"hello\\\",\\\"version\\\":\\\"0.1.0\\\",\\\"caps\\\":[\\\"docker\\\",\\\"systemd\\\"]}\",\"sig\":\"b5cc0793094ab47c155c79abe18a10fcb7d28b6b72e30a4ff91294a742bbe049\"}"
+    },
+    {
+      "direction": "l2a",
+      "seq": 1,
+      "t": 1760000001,
+      "message": {
+        "type": "allow",
+        "caps": [
+          "docker"
+        ],
+        "targets": {
+          "docker": [
+            "jellyfin"
+          ]
+        }
+      },
+      "frame": "{\"id\":\"a1b2c3d4\",\"seq\":1,\"t\":1760000001,\"body\":\"{\\\"type\\\":\\\"allow\\\",\\\"caps\\\":[\\\"docker\\\"],\\\"targets\\\":{\\\"docker\\\":[\\\"jellyfin\\\"]}}\",\"sig\":\"32872dea7803a7fb0e7846adf8c896e3c658fd3eea81067476132e8621484fc4\"}"
+    },
+    {
+      "direction": "a2l",
+      "seq": 2,
+      "t": 1760000002,
+      "message": {
+        "type": "event",
+        "text": "Mașina — „pornită” ✓",
+        "bad": false
+      },
+      "frame": "{\"id\":\"a1b2c3d4\",\"seq\":2,\"t\":1760000002,\"body\":\"{\\\"type\\\":\\\"event\\\",\\\"text\\\":\\\"Mașina — „pornită” ✓\\\",\\\"bad\\\":false}\",\"sig\":\"27934cfc83589c2454c06d55176f7d4e54fc07d483f35f7f5339360550e29b2d\"}"
+    },
+    {
+      "direction": "l2a",
+      "seq": 2,
+      "t": 1760000003,
+      "message": {
+        "type": "command",
+        "cmd": "c-7",
+        "cap": "docker",
+        "verb": "logs",
+        "target": "jellyfin"
+      },
+      "frame": "{\"id\":\"a1b2c3d4\",\"seq\":2,\"t\":1760000003,\"body\":\"{\\\"type\\\":\\\"command\\\",\\\"cmd\\\":\\\"c-7\\\",\\\"cap\\\":\\\"docker\\\",\\\"verb\\\":\\\"logs\\\",\\\"target\\\":\\\"jellyfin\\\"}\",\"sig\":\"5a1c7fe03d362a61d12cafb45e02fa91281606d39e4ae5cdd34ed54458f6a896\"}"
+    },
+    {
+      "direction": "a2l",
+      "seq": 3,
+      "t": 1760000004,
+      "message": {
+        "type": "result",
+        "cmd": "c-7",
+        "ok": true,
+        "output": "started\n⚠ warning: \"x\"\n"
+      },
+      "frame": "{\"id\":\"a1b2c3d4\",\"seq\":3,\"t\":1760000004,\"body\":\"{\\\"type\\\":\\\"result\\\",\\\"cmd\\\":\\\"c-7\\\",\\\"ok\\\":true,\\\"output\\\":\\\"started\\\\n⚠ warning: \\\\\\\"x\\\\\\\"\\\\n\\\"}\",\"sig\":\"888c040c3dadb35f0d4b8a39f9454a71a16d3654926c4f778c1b0f60ebe4621c\"}"
+    },
+    {
+      "direction": "l2a",
+      "seq": 3,
+      "t": 1760000005,
+      "message": {
+        "type": "command",
+        "cmd": "0123456789abcdef",
+        "cap": "docker",
+        "verb": "update",
+        "target": "labhud",
+        "auth": {
+          "registry": "ghcr.io",
+          "nonce": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+          "box": "d92491252cbaf85f5edb0582f1f1d00dad56659177d3bd54cbbbacdf3da7fd4e8522717f6ea2c713ce778ab1840881eab5d36f7521ca81791af72e4f9c25420115672b669b"
+        },
+        "hold_critical": true
+      },
+      "frame": "{\"id\":\"a1b2c3d4\",\"seq\":3,\"t\":1760000005,\"body\":\"{\\\"type\\\":\\\"command\\\",\\\"cmd\\\":\\\"0123456789abcdef\\\",\\\"cap\\\":\\\"docker\\\",\\\"verb\\\":\\\"update\\\",\\\"target\\\":\\\"labhud\\\",\\\"auth\\\":{\\\"registry\\\":\\\"ghcr.io\\\",\\\"nonce\\\":\\\"a0a1a2a3a4a5a6a7a8a9aaabacadaeaf\\\",\\\"box\\\":\\\"d92491252cbaf85f5edb0582f1f1d00dad56659177d3bd54cbbbacdf3da7fd4e8522717f6ea2c713ce778ab1840881eab5d36f7521ca81791af72e4f9c25420115672b669b\\\"},\\\"hold_critical\\\":true}\",\"sig\":\"69fced1e34e54951ec6cb6bf6484f8c59794bd94736ea51baf992cc58cfef7e4\"}"
+    },
+    {
+      "direction": "a2l",
+      "seq": 4,
+      "t": 1760000006,
+      "message": {
+        "type": "state",
+        "containers": {
+          "labhud": {
+            "state": "running",
+            "image": "ghcr.io/mithrandler/labhud:0.3.18",
+            "scan": {
+              "critical": 1,
+              "high": 7,
+              "tool": "trivy",
+              "t": 1759990000
+            }
+          }
+        },
+        "failed_units": null
+      },
+      "frame": "{\"id\":\"a1b2c3d4\",\"seq\":4,\"t\":1760000006,\"body\":\"{\\\"type\\\":\\\"state\\\",\\\"containers\\\":{\\\"labhud\\\":{\\\"state\\\":\\\"running\\\",\\\"image\\\":\\\"ghcr.io/mithrandler/labhud:0.3.18\\\",\\\"scan\\\":{\\\"critical\\\":1,\\\"high\\\":7,\\\"tool\\\":\\\"trivy\\\",\\\"t\\\":1759990000}}},\\\"failed_units\\\":null}\",\"sig\":\"7508d9d21e5bdb0086663209431bc76b6b9f795db7d881ab5b4e853e4b8cc546\"}"
+    }
+  ],
+  "seal": {
+    "cmd": "0123456789abcdef",
+    "nonce": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+    "text": "{\"username\":\"demo\",\"password\":\"tok_0123456789abcdef0123456789abcdef\"}",
+    "box": "d92491252cbaf85f5edb0582f1f1d00dad56659177d3bd54cbbbacdf3da7fd4e8522717f6ea2c713ce778ab1840881eab5d36f7521ca81791af72e4f9c25420115672b669b",
+    "short": {
+      "text": "é",
+      "box": "61af"
+    }
+  },
+  "registries": [
+    [
+      "nginx",
+      "docker.io"
+    ],
+    [
+      "nginx:1.27",
+      "docker.io"
+    ],
+    [
+      "library/nginx",
+      "docker.io"
+    ],
+    [
+      "linuxserver/sonarr:latest",
+      "docker.io"
+    ],
+    [
+      "docker.io/library/nginx:1.27",
+      "docker.io"
+    ],
+    [
+      "index.docker.io/library/nginx",
+      "docker.io"
+    ],
+    [
+      "registry-1.docker.io/x/y",
+      "docker.io"
+    ],
+    [
+      "ghcr.io/mithrandler/labhud:0.3.18",
+      "ghcr.io"
+    ],
+    [
+      "GHCR.io/mithrandler/labhud",
+      "ghcr.io"
+    ],
+    [
+      "lscr.io/linuxserver/radarr",
+      "lscr.io"
+    ],
+    [
+      "localhost/app",
+      "localhost"
+    ],
+    [
+      "localhost:5000/team/app:2",
+      "localhost:5000"
+    ],
+    [
+      "registry.example.net/team/app:latest",
+      "registry.example.net"
+    ],
+    [
+      "registry.example.com:5000/a/b/c@sha256:abababababababababababababababababababababababababababababababab",
+      "registry.example.com:5000"
+    ],
+    [
+      "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      ""
+    ],
+    [
+      "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      ""
+    ],
+    [
+      "",
+      ""
+    ],
+    [
+      "two words",
+      ""
+    ]
+  ]
+}

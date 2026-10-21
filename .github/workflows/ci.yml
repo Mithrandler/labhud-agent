@@ -1,0 +1,141 @@
+# Tests on every push and pull request. On a version tag (vX.Y.Z): the binaries with their
+# SHA256SUMS as a release (on GitHub), and the multi-arch image. Gitea and Forgejo Actions read
+# this file too (.github/workflows is their fallback).
+#
+# Publishing the image: on GitHub, to ghcr.io with the run's own token (nothing to set up).
+# Elsewhere, or to another registry, in the repository settings:
+#   variable REGISTRY        the registry host (no variable, off GitHub: built, not pushed)
+#   secrets  REGISTRY_USER, REGISTRY_TOKEN
+# and, for the same tags in a second registry:
+#   variable EXTRA_IMAGE     the full image name there, e.g. git.example.com/you/labhud-agent
+#   secrets  EXTRA_REGISTRY_USER, EXTRA_REGISTRY_TOKEN
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Format
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "::error::not gofmt'ed"; exit 1; }
+      - name: Vet
+        run: go vet ./...
+      - name: Tests
+        run: go test -race ./...
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Version
+        id: v
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag $GITHUB_REF_NAME is not vX.Y.Z"; exit 1; }
+          grep -q "^## \[$version\]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no entry for $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Binaries
+        run: |
+          mkdir dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X main.version=${{ steps.v.outputs.version }}" \
+              -o dist/labhud-agent-linux-$arch ./cmd/labhud-agent
+          done
+          (cd dist && sha256sum labhud-agent-linux-* > SHA256SUMS && cat SHA256SUMS)
+      - name: Release (GitHub)
+        if: github.server_url == 'https://github.com'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk -v v="${{ steps.v.outputs.version }}" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* --title "labhud-agent ${{ steps.v.outputs.version }}" --notes-file notes.md
+
+  image:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version and tags
+        id: meta
+        env:
+          REGISTRY: ${{ vars.REGISTRY }}
+          EXTRA_IMAGE: ${{ vars.EXTRA_IMAGE }}
+        run: |
+          [[ -n "$REGISTRY" || "$GITHUB_SERVER_URL" != "https://github.com" ]] || REGISTRY=ghcr.io
+          echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
+          image="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            tags="$image:$version,$image:${version%.*},$image:latest"
+            [[ -n "$REGISTRY" ]] || tags="labhud-agent:$version"
+            if [[ -n "$REGISTRY" && -n "$EXTRA_IMAGE" ]]; then
+              extra="${EXTRA_IMAGE,,}"
+              tags="$tags,$extra:$version,$extra:${version%.*},$extra:latest"
+            fi
+            push=true
+          else
+            version="0.0.0-dev+${GITHUB_SHA::7}"
+            tags="labhud-agent:ci"
+            push=false
+          fi
+          [[ -n "$REGISTRY" ]] || push=false
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "push=$push" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v4
+      - if: steps.meta.outputs.push == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ steps.meta.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USER || github.actor }}
+          password: ${{ secrets.REGISTRY_TOKEN || github.token }}
+      - if: steps.meta.outputs.push == 'true' && vars.EXTRA_IMAGE != ''
+        id: extra
+        run: echo "registry=${EXTRA_IMAGE%%/*}" >> "$GITHUB_OUTPUT"
+        env:
+          EXTRA_IMAGE: ${{ vars.EXTRA_IMAGE }}
+      - if: steps.meta.outputs.push == 'true' && vars.EXTRA_IMAGE != ''
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ steps.extra.outputs.registry }}
+          username: ${{ secrets.EXTRA_REGISTRY_USER }}
+          password: ${{ secrets.EXTRA_REGISTRY_TOKEN }}
+      - name: The image starts and says its version
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          tags: labhud-agent:check
+      - run: docker run --rm labhud-agent:check -version
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          push: ${{ steps.meta.outputs.push == 'true' }}
