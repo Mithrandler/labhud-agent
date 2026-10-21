@@ -251,9 +251,16 @@ func (s *Stacks) Deploy(ctx context.Context, verb, target string, files map[stri
 	if err := os.WriteFile(filepath.Join(tmp, "compose.yaml"), []byte(compose), 0o600); err != nil {
 		return "", err
 	}
-	env := files["env"] != ""
+	// "env" missing keeps the .env the host has; "" takes it away
+	envText, given := files["env"]
+	if !given {
+		if old, err := os.ReadFile(filepath.Join(dir, ".env")); err == nil {
+			envText, given = string(old), true
+		}
+	}
+	env := envText != ""
 	if env {
-		if err := os.WriteFile(filepath.Join(tmp, ".env"), []byte(files["env"]), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(tmp, ".env"), []byte(envText), 0o600); err != nil {
 			return "", err
 		}
 	}

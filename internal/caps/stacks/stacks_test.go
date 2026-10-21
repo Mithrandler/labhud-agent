@@ -99,7 +99,7 @@ func TestEnvTakenAwayIsRemoved(t *testing.T) {
 	s, _ := fake(t)
 	ctx := context.Background()
 	s.Deploy(ctx, "deploy", "web", map[string]string{"compose": "services: {}\n", "env": "A=1\n"})
-	s.Deploy(ctx, "deploy", "web", map[string]string{"compose": "services: {}\n"})
+	s.Deploy(ctx, "deploy", "web", map[string]string{"compose": "services: {}\n", "env": ""})
 	if _, err := os.Stat(filepath.Join(s.Dir, "web", ".env")); err == nil {
 		t.Error(".env stayed")
 	}
@@ -155,5 +155,18 @@ func TestRedeployPullsThenUps(t *testing.T) {
 	n := len(c)
 	if !strings.HasSuffix(c[n-2], " pull") || !strings.HasSuffix(c[n-1], "up -d --remove-orphans") {
 		t.Errorf("calls: %v", c[n-2:])
+	}
+}
+
+func TestMissingEnvKeepsTheHostsEnv(t *testing.T) {
+	s, _ := fake(t)
+	ctx := context.Background()
+	s.Deploy(ctx, "deploy", "web", map[string]string{"compose": "services: {}\n", "env": "A=1\n"})
+	if _, err := s.Deploy(ctx, "deploy", "web", map[string]string{"compose": "services: {a: {}}\n"}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(s.Dir, "web", ".env"))
+	if err != nil || string(b) != "A=1\n" {
+		t.Errorf(".env: %q %v", b, err)
 	}
 }
