@@ -14,7 +14,7 @@ import (
 
 // Verbs per capability: the same table as labhud's agents.VERBS. Nothing runs a command.
 var Verbs = map[string][]string{
-	"docker":  {"start", "stop", "restart", "update", "logs", "prune", "inspect"},
+	"docker":  {"start", "stop", "restart", "update", "logs", "prune", "inspect", "inventory", "prune-dangling", "prune-networks", "prune-volumes"},
 	"systemd": {"start", "stop", "restart"},
 	"host":    {"reboot", "shutdown", "update"},
 	"wol":     {"wake"},
@@ -65,15 +65,26 @@ func (l *List) Check(cap, verb, target string) error {
 		!slices.Contains(l.caps, cap) || !slices.Contains(l.targets[cap], target) {
 		return ErrNotAllowed
 	}
-	// prune is for the host's images, ticked as the target "images"; that target is nothing else
-	if cap == "docker" && (verb == "prune") != (target == PruneTarget) {
+	// the host verbs are for the target "images" (the host's Docker, not a container), and that
+	// target takes nothing else
+	if cap == "docker" && HostVerb(verb) != (target == PruneTarget) {
 		return ErrNotAllowed
 	}
 	return nil
 }
 
-// PruneTarget: docker's prune cleans the host's images, ticked in labhud as this target.
+// PruneTarget: the host's Docker (its images, volumes and networks), ticked in labhud as this
+// target: the verbs below are for it and for nothing else.
 const PruneTarget = "images"
+
+// HostVerb: a docker verb about the host's images, volumes and networks, not about a container.
+func HostVerb(verb string) bool {
+	switch verb {
+	case "prune", "prune-dangling", "prune-networks", "prune-volumes", "inventory":
+		return true
+	}
+	return false
+}
 
 // Auto: is labhud updating this target on its own?
 func (l *List) Auto(cap, target string) bool {

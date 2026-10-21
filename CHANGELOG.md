@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **The host's Docker, whole**: on the target `images` (ticked like a container), the read verb `inventory`
+  lists the images (size, tags, containers using each, untagged), the volumes (size, users, anonymous or
+  named) and the networks (containers on each), the biggest first, at most 100 of each. New cleaning
+  verbs beside `prune`: `prune-dangling` (untagged layers), `prune-networks` (user-made networks no
+  container is on, a day old at least) and `prune-volumes` (only anonymous volumes nothing uses: the
+  agent picks them itself and never removes a named volume). All of them are for `images` and nothing else.
+
 ## [0.1.0] - 2026-10-21
 
 The first version, with labhud 0.1.0 (the agent, the server and the app share a version from now).

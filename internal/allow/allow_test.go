@@ -13,7 +13,8 @@ func TestCheck(t *testing.T) {
 	}
 	l.Set(proto.Allow{Caps: []string{"docker", "pve"}, Targets: map[string][]string{
 		"docker": {"jellyfin", "images"}, "pve": {"101"}, "systemd": {"nginx.service"}}})
-	ok := [][3]string{{"docker", "restart", "jellyfin"}, {"pve", "shutdown", "101"}, {"docker", "prune", "images"}}
+	ok := [][3]string{{"docker", "restart", "jellyfin"}, {"pve", "shutdown", "101"}, {"docker", "prune", "images"},
+		{"docker", "inventory", "images"}, {"docker", "prune-dangling", "images"}, {"docker", "prune-networks", "images"}, {"docker", "prune-volumes", "images"}}
 	no := [][3]string{
 		{"docker", "restart", "plex"},           // target not ticked
 		{"docker", "exec", "jellyfin"},          // no such verb
@@ -23,6 +24,9 @@ func TestCheck(t *testing.T) {
 		{"host", "reboot", "host"},              // not ticked
 		{"docker", "prune", "jellyfin"},         // prune is for the images only
 		{"docker", "stop", "images"},            // and "images" is no container
+		{"docker", "inventory", "jellyfin"},     // the host verbs are for the images target only
+		{"docker", "prune-volumes", "jellyfin"},
+		{"docker", "prune-networks", "jellyfin"},
 	}
 	for _, c := range ok {
 		if err := l.Check(c[0], c[1], c[2]); err != nil {

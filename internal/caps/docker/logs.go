@@ -20,14 +20,14 @@ import (
 const LogLines = 200
 
 func (d *Docker) Reads(verb string) bool {
-	return verb == "logs" || verb == "prune" || verb == "inspect"
+	return verb == "logs" || verb == "inspect" || allow.HostVerb(verb)
 }
 
 // Read gives a container's last lines (stdout and stderr, in order), without colour codes; or,
 // for prune, what cleaning the unused images freed.
 func (d *Docker) Read(ctx context.Context, verb, target string) (string, error) {
-	if verb == "prune" {
-		return d.prune(ctx, target)
+	if allow.HostVerb(verb) {
+		return d.host(ctx, verb, target)
 	}
 	if verb == "inspect" {
 		return d.inspect(ctx, target)

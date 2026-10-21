@@ -157,7 +157,7 @@ func (d *Docker) Do(ctx context.Context, verb, target string) error {
 	if verb == "update" {
 		return d.UpdateWith(target, caps.UpdateOptions{})
 	}
-	if verb == "logs" || verb == "prune" || verb == "inspect" {
+	if d.Reads(verb) {
 		return fmt.Errorf("docker: %s is read, not done", verb)
 	}
 	path := "/containers/" + url.PathEscape(target) + "/" + verb
