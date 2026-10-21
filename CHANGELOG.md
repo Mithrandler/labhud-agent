@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-22
+
+With labhud 0.1.1, which needs it for the live log, the terminal, stacks and the host's Docker.
+
 ### Added
 
 - **Streams**: labhud can `open` a live stream on a ticked container and receive `chunk`s until an `end`
@@ -83,5 +87,6 @@ The first version, with labhud 0.1.0 (the agent, the server and the app share a 
 - A Pterodactyl panel with a self-signed certificate: `LABHUD_PTERO_PIN` (its SHA-256) accepts that
   certificate and no other.
 
-[Unreleased]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Mithrandler/labhud-agent/releases/tag/v0.1.0
