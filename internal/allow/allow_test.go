@@ -27,7 +27,7 @@ func TestCheck(t *testing.T) {
 		{"terminal", "shell", "images"},         // "images" is no container
 		{"terminal", "exec", "jellyfin"},
 		{"docker", "follow", "images"},
-		{"stacks", "deploy", "Web"},             // a stack's name is lowercase
+		{"stacks", "deploy", "Web"}, // a stack's name is lowercase
 		{"stacks", "deploy", "../etc"},
 		{"stacks", "exec", "web"},           // no such verb
 		{"stacks", "deploy", "api"},         // not ticked
