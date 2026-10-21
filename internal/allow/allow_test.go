@@ -11,9 +11,9 @@ func TestCheck(t *testing.T) {
 	if l.Check("docker", "restart", "jellyfin") == nil {
 		t.Fatal("allowed before any allow")
 	}
-	l.Set(proto.Allow{Caps: []string{"docker", "pve", "stacks"}, Targets: map[string][]string{
-		"docker": {"jellyfin", "images"}, "stacks": {"web"}, "pve": {"101"}, "systemd": {"nginx.service"}}})
-	ok := [][3]string{{"docker", "restart", "jellyfin"}, {"pve", "shutdown", "101"}, {"stacks", "deploy", "web"}, {"stacks", "down", "web"}, {"docker", "prune", "images"},
+	l.Set(proto.Allow{Caps: []string{"docker", "pve", "stacks", "terminal"}, Targets: map[string][]string{
+		"docker": {"jellyfin", "images"}, "stacks": {"web"}, "terminal": {"jellyfin", "images"}, "pve": {"101"}, "systemd": {"nginx.service"}}})
+	ok := [][3]string{{"docker", "restart", "jellyfin"}, {"pve", "shutdown", "101"}, {"stacks", "deploy", "web"}, {"terminal", "shell", "jellyfin"}, {"docker", "follow", "jellyfin"}, {"stacks", "down", "web"}, {"docker", "prune", "images"},
 		{"docker", "inventory", "images"}, {"docker", "prune-dangling", "images"}, {"docker", "prune-networks", "images"}, {"docker", "prune-volumes", "images"}}
 	no := [][3]string{
 		{"docker", "restart", "plex"},           // target not ticked
@@ -23,6 +23,10 @@ func TestCheck(t *testing.T) {
 		{"shell", "run", "ls"},                  // no such capability
 		{"host", "reboot", "host"},              // not ticked
 		{"docker", "prune", "jellyfin"},         // prune is for the images only
+		{"terminal", "shell", "plex"},           // not ticked for the terminal
+		{"terminal", "shell", "images"},         // "images" is no container
+		{"terminal", "exec", "jellyfin"},
+		{"docker", "follow", "images"},
 		{"stacks", "deploy", "Web"},             // a stack's name is lowercase
 		{"stacks", "deploy", "../etc"},
 		{"stacks", "exec", "web"},           // no such verb

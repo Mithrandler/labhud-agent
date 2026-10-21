@@ -54,3 +54,21 @@ type Slow interface {
 type Deployer interface {
 	Deploy(ctx context.Context, verb, target string, files map[string]string) (string, error)
 }
+
+// Stream is something open on the host that output comes out of and input may go into: a
+// container's log being followed (input is refused), a shell in a container.
+type Stream interface {
+	Read(p []byte) (int, error)
+	Write(p []byte) (int, error)
+	Resize(cols, rows int) error
+	Close() error
+}
+
+// Streamer is a capability with verbs that open a Stream. The allow list was checked before.
+type Streamer interface {
+	Streams(verb string) bool
+	// Limits: the longest a stream of this verb lives and how long it may sit without input
+	// (0: no idle limit)
+	Limits(verb string) (life, idle time.Duration)
+	Open(ctx context.Context, verb, target string, cols, rows int) (Stream, error)
+}

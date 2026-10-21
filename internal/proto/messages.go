@@ -148,3 +148,46 @@ type Bye struct {
 	Type   string `json:"type"` // "bye"
 	Reason string `json:"reason"`
 }
+
+// --- streams: a docker container's live log and a terminal in it ---
+//
+// labhud opens one (signed, checked against the allow list like a command), then sends input,
+// resize and close; the agent answers with chunks and one end. The data of a chunk and of an
+// input is base64 (a terminal speaks bytes). Nothing is kept on either side after it is passed on.
+
+// Open: labhud to agent. Cap/Verb/Target are checked as a command's: docker follow <container>,
+// terminal shell <container>.
+type Open struct {
+	Type   string `json:"type"` // "open"
+	Cmd    string `json:"cmd"`
+	Cap    string `json:"cap"`
+	Verb   string `json:"verb"`
+	Target string `json:"target"`
+	Cols   int    `json:"cols,omitempty"`
+	Rows   int    `json:"rows,omitempty"`
+}
+
+// StreamIn: labhud to agent, for an open stream: Type is "input" (Data), "resize" (Cols, Rows)
+// or "close".
+type StreamIn struct {
+	Type string `json:"type"`
+	Cmd  string `json:"cmd"`
+	Data string `json:"data,omitempty"`
+	Cols int    `json:"cols,omitempty"`
+	Rows int    `json:"rows,omitempty"`
+}
+
+// Chunk: agent to labhud, output of an open stream (Data is base64, at most 8 KiB before encoding).
+type Chunk struct {
+	Type string `json:"type"` // "chunk"
+	Cmd  string `json:"cmd"`
+	Data string `json:"data"`
+}
+
+// End: agent to labhud, the one last message of a stream; Reason says why ("closed", "time",
+// "idle", "container ended", or an error). It is also the answer to an Open that was refused.
+type End struct {
+	Type   string `json:"type"` // "end"
+	Cmd    string `json:"cmd"`
+	Reason string `json:"reason"`
+}

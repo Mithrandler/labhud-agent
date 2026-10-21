@@ -14,24 +14,26 @@ import (
 
 // Verbs per capability: the same table as labhud's agents.VERBS. Nothing runs a command.
 var Verbs = map[string][]string{
-	"docker":  {"start", "stop", "restart", "update", "logs", "prune", "inspect", "inventory", "prune-dangling", "prune-networks", "prune-volumes"},
-	"systemd": {"start", "stop", "restart"},
-	"host":    {"reboot", "shutdown", "update"},
-	"wol":     {"wake"},
-	"stacks":  {"deploy", "redeploy", "restart", "down", "show"},
-	"pve":     {"start", "shutdown", "reboot"},
-	"ptero":   {"start", "stop", "restart"},
+	"docker":   {"start", "stop", "restart", "update", "logs", "prune", "inspect", "inventory", "prune-dangling", "prune-networks", "prune-volumes", "follow"},
+	"systemd":  {"start", "stop", "restart"},
+	"host":     {"reboot", "shutdown", "update"},
+	"wol":      {"wake"},
+	"terminal": {"shell"},
+	"stacks":   {"deploy", "redeploy", "restart", "down", "show"},
+	"pve":      {"start", "shutdown", "reboot"},
+	"ptero":    {"start", "stop", "restart"},
 }
 
 // Target is the shape of a valid target per capability (labhud's agents.TARGET).
 var Target = map[string]*regexp.Regexp{
-	"docker":  regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`),
-	"systemd": regexp.MustCompile(`^[A-Za-z0-9:_.@-]{1,250}\.(service|timer|socket|target|mount|path)$`),
-	"host":    regexp.MustCompile(`^host$`),
-	"wol":     regexp.MustCompile(`^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`),
-	"stacks":  regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`),
-	"pve":     regexp.MustCompile(`^[1-9][0-9]{2,8}$`),
-	"ptero":   regexp.MustCompile(`^[0-9a-f]{8}$`),
+	"docker":   regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`),
+	"systemd":  regexp.MustCompile(`^[A-Za-z0-9:_.@-]{1,250}\.(service|timer|socket|target|mount|path)$`),
+	"host":     regexp.MustCompile(`^host$`),
+	"wol":      regexp.MustCompile(`^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`),
+	"stacks":   regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`),
+	"terminal": regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`),
+	"pve":      regexp.MustCompile(`^[1-9][0-9]{2,8}$`),
+	"ptero":    regexp.MustCompile(`^[0-9a-f]{8}$`),
 }
 
 var ErrNotAllowed = errors.New("not allowed")
@@ -70,6 +72,9 @@ func (l *List) Check(cap, verb, target string) error {
 	// the host verbs are for the target "images" (the host's Docker, not a container), and that
 	// target takes nothing else
 	if cap == "docker" && HostVerb(verb) != (target == PruneTarget) {
+		return ErrNotAllowed
+	}
+	if cap == "terminal" && target == PruneTarget { // "images" is no container
 		return ErrNotAllowed
 	}
 	return nil

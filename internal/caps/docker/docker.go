@@ -25,9 +25,10 @@ import (
 const Socket = "/var/run/docker.sock"
 
 type Docker struct {
-	c     *http.Client
-	Allow *allow.List       // the ticked containers: only their images are checked
-	Send  func(proto.Event) // the end of an update, a crash: for labhud's timeline
+	c      *http.Client
+	socket string            // for what an http.Client cannot do: a connection taken over (terminal.go)
+	Allow  *allow.List       // the ticked containers: only their images are checked
+	Send   func(proto.Event) // the end of an update, a crash: for labhud's timeline
 	// AutoLabels: set on a container made again while labhud updates it on its own, removed when
 	// it does not (config.AutoLabels)
 	AutoLabels map[string]string
@@ -47,7 +48,7 @@ func New(socket string) *Docker {
 	if fi, err := os.Stat(socket); err != nil || fi.Mode()&os.ModeSocket == 0 {
 		return nil
 	}
-	return &Docker{c: &http.Client{Transport: &http.Transport{
+	return &Docker{socket: socket, c: &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", socket)
 		},
@@ -157,7 +158,7 @@ func (d *Docker) Do(ctx context.Context, verb, target string) error {
 	if verb == "update" {
 		return d.UpdateWith(target, caps.UpdateOptions{})
 	}
-	if d.Reads(verb) {
+	if d.Reads(verb) || verb == "follow" {
 		return fmt.Errorf("docker: %s is read, not done", verb)
 	}
 	path := "/containers/" + url.PathEscape(target) + "/" + verb

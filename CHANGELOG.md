@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Streams**: labhud can `open` a live stream on a ticked container and receive `chunk`s until an `end`
+  (the messages `open`, `input`, `resize`, `close`, `chunk`, `end`; at most 3 open on a connection, closed
+  with it). `docker` `follow`: the container's log, 50 lines back, then live, read only, closes after 10
+  minutes. `terminal` `shell`: a shell (bash, else sh) in the container through `docker exec` with a TTY,
+  closes after 15 minutes or 3 without a key, only when the agent is started with
+  `LABHUD_AGENT_TERMINAL=on` and the container is ticked under *Terminal* (a tick of its own, not
+  docker's). Nothing that goes through a stream is logged or kept.
 - **Stacks (compose)**, off unless `LABHUD_AGENT_STACKS=<folder>` is set and the host has `docker compose`
   (or `docker-compose`): the capability `stacks`, a folder per stack holding `compose.yaml` and an optional
   `.env`. Verbs: `deploy` (the files arrive sealed, up to 64 KiB, are written with mode 0600, checked with

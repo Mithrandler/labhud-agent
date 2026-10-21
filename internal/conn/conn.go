@@ -144,6 +144,7 @@ type session struct {
 	seqOut  int64
 	seqIn   int64
 	now     func() time.Time
+	streams streamTable // streams.go: what is open on this connection
 }
 
 func (s *session) send(ctx context.Context, msg any) error {
@@ -246,6 +247,7 @@ func (a *Agent) Once(ctx context.Context) error {
 		return err
 	}
 	a.Log.Printf("connected to %s as %s", a.Cfg.URL, id.ID)
+	defer s.streams.closeAll() // what is open ends with the connection
 	return a.loop(ctx, s)
 }
 
@@ -483,6 +485,19 @@ func (a *Agent) handle(ctx context.Context, s *session, f proto.Frame) error {
 			return fmt.Errorf("bad command: %w", err)
 		}
 		go a.run(ctx, s, cmd)
+	case "open":
+		var o proto.Open
+		if err := json.Unmarshal(f.Body, &o); err != nil {
+			return fmt.Errorf("bad open: %w", err)
+		}
+		a.openStream(ctx, s, o)
+	case "input", "resize", "close":
+		var in proto.StreamIn
+		if err := json.Unmarshal(f.Body, &in); err != nil {
+			return fmt.Errorf("bad %s: %w", f.Type, err)
+		}
+		in.Type = f.Type
+		s.streams.in(in)
 	case "update":
 		var up proto.Update
 		if err := json.Unmarshal(f.Body, &up); err != nil {

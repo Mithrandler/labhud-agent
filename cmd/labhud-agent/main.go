@@ -78,6 +78,9 @@ func detect(ctx context.Context, cfg config.Config, agent *conn.Agent, logger *l
 		go d.Events(ctx)
 		go d.Measure(ctx)
 		found = append(found, d)
+		if cfg.Terminal {
+			found = append(found, &docker.Terminal{D: d})
+		}
 		// scan: trivy or grype on the host; after docker, so its Fill sees the containers
 		if s := scan.New(agent.Allow, d.ImageOf); s != nil {
 			s.Log = logger.Printf
