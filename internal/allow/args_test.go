@@ -44,6 +44,7 @@ func TestCheckArg(t *testing.T) {
 		{"rm-network", "media_default"}, {"rm-volume", "pgdata"}, {"network-inspect", "proxy"},
 		{"volume-ls", ""}, {"volume-ls", "/"}, {"volume-ls", "/base/16384"}, {"volume-read", "/postgresql.conf"},
 		{"volume-read", "/dir with spaces/file.txt"},
+		{"version", "1760000000"}, {"restore", "1"}, {"restore", "999999999999"},
 		{"restart", ""}, {"logs", ""},
 	}
 	for _, c := range ok {
@@ -57,6 +58,8 @@ func TestCheckArg(t *testing.T) {
 		{"rm-network", "a/b"}, {"rm-volume", "../etc"}, {"rm-volume", ""}, {"network-inspect", "-all"},
 		{"volume-ls", "/../etc"}, {"volume-ls", "/a/../../b"}, {"volume-ls", "/a\x00b"}, {"volume-ls", "/a\nb"},
 		{"volume-read", ""}, {"volume-read", "/"}, {"volume-read", "/x/../../etc/passwd"},
+		{"version", ""}, {"restore", ""}, {"version", "-1"}, {"restore", "../1"}, {"version", "1.5"}, {"restore", "1 2"},
+		{"version", "1234567890123"}, {"restore", "1;rm"}, {"version", "\n1"}, {"restore", "latest"},
 		{"restart", "x"}, {"logs", "x"}, {"stats", "--all"}, {"inventory", "x"}, {"prune", "x"}, {"start", "../"},
 	}
 	for _, c := range bad {
