@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`docker` `stats`**: one running container's numbers now (CPU in % of one core, memory without the page cache and its
+  limit, network and disk totals, processes), a read verb on a ticked container, for labhud's Servers zone. Numbers only.
+
 ## [0.1.1] - 2026-10-22
 
 With labhud 0.1.1, which needs it for the live log, the terminal, stacks and the host's Docker.
