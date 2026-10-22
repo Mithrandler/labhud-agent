@@ -11,6 +11,7 @@ package stacks
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -139,7 +141,7 @@ func (s *Stacks) Do(ctx context.Context, verb, target string) error {
 
 func (s *Stacks) Reads(verb string) bool {
 	switch verb {
-	case "deploy", "redeploy", "restart", "down", "show":
+	case "deploy", "redeploy", "restart", "down", "show", "read":
 		return true
 	}
 	return false
@@ -169,6 +171,8 @@ func (s *Stacks) Read(ctx context.Context, verb, target string) (string, error) 
 	switch verb {
 	case "show":
 		return show(dir)
+	case "read":
+		return readFiles(dir, "")
 	case "redeploy":
 		out, err := s.run(ctx, dir, args(target, env, "pull")...)
 		if err != nil {
@@ -226,7 +230,7 @@ func fail(step, out string, err error) error {
 // Deploy writes the files and brings the stack up. The compose file is checked first
 // (`config --quiet`); a failing one leaves the old files as they were.
 func (s *Stacks) Deploy(ctx context.Context, verb, target string, files map[string]string) (string, error) {
-	if verb != "deploy" {
+	if verb != "deploy" && verb != "validate" && verb != "save" {
 		return "", fmt.Errorf("stacks: %s takes no files", verb)
 	}
 	dir, err := s.dir(target)
@@ -253,10 +257,17 @@ func (s *Stacks) Deploy(ctx context.Context, verb, target string, files map[stri
 	}
 	// "env" missing keeps the .env the host has; "" takes it away
 	envText, given := files["env"]
+	old, haveOld := os.ReadFile(filepath.Join(dir, ".env"))
 	if !given {
-		if old, err := os.ReadFile(filepath.Join(dir, ".env")); err == nil {
+		if haveOld == nil {
 			envText, given = string(old), true
 		}
+	} else {
+		merged, err := mergeEnv(envText, string(old))
+		if err != nil {
+			return "", err
+		}
+		envText = merged
 	}
 	env := envText != ""
 	if env {
@@ -267,9 +278,13 @@ func (s *Stacks) Deploy(ctx context.Context, verb, target string, files map[stri
 	if out, err := s.run(ctx, tmp, args(target, env, "config", "--quiet")...); err != nil {
 		return out, fail("config", out, err)
 	}
+	if verb == "validate" {
+		return "compose file is valid", nil
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
+	snapshot(dir)
 	for _, f := range []string{"compose.yaml", ".env"} {
 		src := filepath.Join(tmp, f)
 		if !exists(src) {
@@ -280,6 +295,139 @@ func (s *Stacks) Deploy(ctx context.Context, verb, target string, files map[stri
 			return "", err
 		}
 	}
+	if verb == "save" {
+		return "saved", nil
+	}
 	out, err := s.run(ctx, dir, args(target, env, "up", "-d", "--remove-orphans")...)
 	return out, fail("up", out, err)
+}
+
+// TakesArg: the verbs that name a saved version of a stack.
+func (s *Stacks) TakesArg(verb string) bool { return verb == "version" || verb == "restore" }
+
+// RunArg: `version` reads an older version (like `read`); `restore` makes it the current one
+// (checked first, the present one kept in the history), without bringing the stack up.
+func (s *Stacks) RunArg(ctx context.Context, verb, target, arg string) (string, error) {
+	dir, err := s.dir(target)
+	if err != nil {
+		return "", err
+	}
+	old := filepath.Join(dir, historyDir, arg)
+	if !exists(filepath.Join(old, "compose.yaml")) {
+		return "", errors.New("stacks: no such version")
+	}
+	if verb == "version" {
+		return readFiles(dir, arg)
+	}
+	compose, err := os.ReadFile(filepath.Join(old, "compose.yaml"))
+	if err != nil {
+		return "", err
+	}
+	files := map[string]string{"compose": string(compose), "env": ""}
+	if e, err := os.ReadFile(filepath.Join(old, ".env")); err == nil {
+		files["env"] = string(e)
+	}
+	return s.Deploy(ctx, "save", target, files)
+}
+
+const (
+	historyDir  = ".history"
+	keepHistory = 10
+	// Mask stands in for an .env value in what `read` gives back: the values stay on the host. A
+	// line that still says KEY=Mask when saved keeps the host's value of KEY.
+	Mask = "********"
+)
+
+// snapshot keeps the stack's present files under .history/<unix time>, the newest keepHistory.
+func snapshot(dir string) {
+	if !exists(filepath.Join(dir, "compose.yaml")) {
+		return
+	}
+	id := strconv.FormatInt(time.Now().Unix(), 10)
+	dst := filepath.Join(dir, historyDir, id)
+	if os.MkdirAll(dst, 0o700) != nil {
+		return
+	}
+	for _, f := range []string{"compose.yaml", ".env"} {
+		if b, err := os.ReadFile(filepath.Join(dir, f)); err == nil {
+			_ = os.WriteFile(filepath.Join(dst, f), b, 0o600)
+		}
+	}
+	ids := versions(dir)
+	for i := keepHistory; i < len(ids); i++ {
+		_ = os.RemoveAll(filepath.Join(dir, historyDir, strconv.FormatInt(ids[i], 10)))
+	}
+}
+
+// versions: the saved versions' ids (unix times), newest first.
+func versions(dir string) []int64 {
+	entries, _ := os.ReadDir(filepath.Join(dir, historyDir))
+	var ids []int64
+	for _, e := range entries {
+		if n, err := strconv.ParseInt(e.Name(), 10, 64); err == nil && e.IsDir() && n > 0 {
+			ids = append(ids, n)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] > ids[j] })
+	return ids
+}
+
+// maskEnv gives an .env with every value replaced by Mask (comments and blank lines as they are).
+func maskEnv(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		t := strings.TrimSpace(l)
+		if k, _, ok := strings.Cut(t, "="); ok && k != "" && !strings.HasPrefix(t, "#") {
+			lines[i] = strings.TrimSpace(k) + "=" + Mask
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// mergeEnv puts the host's value back where the text says KEY=Mask. A masked key the host does not
+// have is refused: the admin has to give it a value.
+func mergeEnv(text, old string) (string, error) {
+	have := map[string]string{}
+	for _, l := range strings.Split(old, "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(l), "="); ok && k != "" && !strings.HasPrefix(k, "#") {
+			have[strings.TrimSpace(k)] = v
+		}
+	}
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		t := strings.TrimSpace(l)
+		k, v, ok := strings.Cut(t, "=")
+		if !ok || strings.HasPrefix(t, "#") || strings.TrimSpace(v) != Mask {
+			continue
+		}
+		k = strings.TrimSpace(k)
+		val, found := have[k]
+		if !found {
+			return "", fmt.Errorf("stacks: %s has no value on this host: give it one", k)
+		}
+		lines[i] = k + "=" + val
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// readFiles: {"compose", "env" (masked), "versions": [ids]} of the present files, or of version `id`.
+func readFiles(dir, id string) (string, error) {
+	base := dir
+	if id != "" {
+		base = filepath.Join(dir, historyDir, id)
+	}
+	c, err := os.ReadFile(filepath.Join(base, "compose.yaml"))
+	if err != nil {
+		return "", err
+	}
+	out := map[string]any{"compose": string(c), "has_env": false, "versions": versions(dir)}
+	if e, err := os.ReadFile(filepath.Join(base, ".env")); err == nil {
+		out["has_env"] = true
+		out["env"] = maskEnv(string(e))
+	}
+	b, err := json.Marshal(out)
+	if len(b) > 40<<10 {
+		return "", errors.New("stacks: the files are too long to show together")
+	}
+	return string(b), err
 }

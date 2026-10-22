@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -168,5 +169,77 @@ func TestMissingEnvKeepsTheHostsEnv(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(s.Dir, "web", ".env"))
 	if err != nil || string(b) != "A=1\n" {
 		t.Errorf(".env: %q %v", b, err)
+	}
+}
+
+func TestValidateWritesNothing(t *testing.T) {
+	s, _ := fake(t)
+	ctx := context.Background()
+	if out, err := s.Deploy(ctx, "validate", "web", map[string]string{"compose": "services: {}\n"}); err != nil || !strings.Contains(out, "valid") {
+		t.Fatal(out, err)
+	}
+	if exists(filepath.Join(s.Dir, "web")) {
+		t.Error("validate left a folder")
+	}
+	if _, err := s.Deploy(ctx, "validate", "web", map[string]string{"compose": "broken\n"}); err == nil {
+		t.Error("a broken file passed")
+	}
+}
+
+func TestSaveKeepsHistoryAndDoesNotRunUp(t *testing.T) {
+	s, log := fake(t)
+	ctx := context.Background()
+	if _, err := s.Deploy(ctx, "deploy", "web", map[string]string{"compose": "a: 1\n", "env": "K=secret\n"}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(calls(t, log))
+	if _, err := s.Deploy(ctx, "save", "web", map[string]string{"compose": "a: 2\n", "env": "K=" + Mask + "\n"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range calls(t, log)[before:] {
+		if strings.Contains(c, " up ") {
+			t.Errorf("save ran %q", c)
+		}
+	}
+	if b, _ := os.ReadFile(filepath.Join(s.Dir, "web", ".env")); string(b) != "K=secret\n" {
+		t.Errorf("the masked value did not keep the host's: %q", b)
+	}
+	if ids := versions(filepath.Join(s.Dir, "web")); len(ids) != 1 {
+		t.Fatalf("history: %v", ids)
+	}
+}
+
+func TestMaskedKeyTheHostLacksIsRefused(t *testing.T) {
+	s, _ := fake(t)
+	if _, err := s.Deploy(context.Background(), "save", "web", map[string]string{"compose": "a: 1\n", "env": "NEW=" + Mask + "\n"}); err == nil {
+		t.Error("a masked value with nothing behind it was taken")
+	}
+}
+
+func TestReadMasksAndRestoreChecks(t *testing.T) {
+	s, _ := fake(t)
+	ctx := context.Background()
+	s.Deploy(ctx, "deploy", "web", map[string]string{"compose": "a: 1\n", "env": "PASS=hunter2\n# c\n"})
+	s.Deploy(ctx, "save", "web", map[string]string{"compose": "a: 2\n"})
+	out, err := s.Read(ctx, "read", "web")
+	if err != nil || strings.Contains(out, "hunter2") || !strings.Contains(out, "PASS="+Mask) {
+		t.Fatalf("read: %q %v", out, err)
+	}
+	ids := versions(filepath.Join(s.Dir, "web"))
+	if len(ids) == 0 {
+		t.Fatal("no history")
+	}
+	arg := strconv.FormatInt(ids[0], 10)
+	if v, err := s.RunArg(ctx, "version", "web", arg); err != nil || strings.Contains(v, "hunter2") {
+		t.Fatalf("version: %q %v", v, err)
+	}
+	if _, err := s.RunArg(ctx, "restore", "web", arg); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(s.Dir, "web", "compose.yaml")); string(b) != "a: 1\n" {
+		t.Errorf("restore: %q", b)
+	}
+	if _, err := s.RunArg(ctx, "version", "web", "999"); err == nil {
+		t.Error("a version that is not there")
 	}
 }

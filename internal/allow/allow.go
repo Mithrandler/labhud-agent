@@ -22,7 +22,7 @@ var Verbs = map[string][]string{
 	"host":     {"reboot", "shutdown", "update"},
 	"wol":      {"wake"},
 	"terminal": {"shell"},
-	"stacks":   {"deploy", "redeploy", "restart", "down", "show"},
+	"stacks":   {"deploy", "redeploy", "restart", "down", "show", "read", "validate", "save", "version", "restore"},
 	"pve":      {"start", "shutdown", "reboot"},
 	"ptero":    {"start", "stop", "restart"},
 }
@@ -136,8 +136,9 @@ func (l *List) Has(cap string) bool {
 
 // The argument of each verb that takes one (every other verb takes none).
 var (
-	imageArg = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,199}$`)
-	nameArg  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+	imageArg   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,199}$`)
+	versionArg = regexp.MustCompile(`^[0-9]{1,12}$`)
+	nameArg    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 )
 
 const MaxPath = 400
@@ -171,6 +172,10 @@ func CheckArg(verb, arg string) error {
 		}
 	case "rm-network", "rm-volume", "network-inspect":
 		if !nameArg.MatchString(arg) {
+			return ErrNotAllowed
+		}
+	case "version", "restore":
+		if !versionArg.MatchString(arg) {
 			return ErrNotAllowed
 		}
 	case "volume-ls", "volume-read":
