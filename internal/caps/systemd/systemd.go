@@ -146,6 +146,11 @@ type Host struct {
 
 	mu       sync.Mutex
 	updating bool
+
+	// the count of pending packages, looked up at most every PendingEvery (a simulated upgrade, nothing installed)
+	Simulate     func(ctx context.Context) (string, error)
+	pendingAt    time.Time
+	pendingCount map[string]any
 }
 
 // NewHost: Power calls login1 over its own bus connection.
@@ -165,7 +170,11 @@ func login1(ctx context.Context, method string) error {
 
 func (h *Host) Name() string { return "host" }
 
-func (h *Host) Fill(context.Context, *proto.State) {}
+func (h *Host) Fill(ctx context.Context, st *proto.State) {
+	if u := h.pending(ctx); u != nil {
+		st.Updates = u
+	}
+}
 
 // execCmd is systemd's (sasb): path, argv, and whether a failure is IGNORED (the "-" prefix).
 // go-systemd calls that bool UncleanIsFailure, which is the opposite: with true, an update that

@@ -32,7 +32,7 @@ func guestFake(t *testing.T, denySnap bool) (*PVE, *[]string) {
 			w.Write([]byte(`{"data":{"name":"pbs","cores":2,"memory":4096,"cipassword":"hunter2","sshkeys":"ssh-ed25519%20AAA","keyboard":"en-us","net0":"virtio=AA:BB,bridge=vmbr0"}}`))
 		case strings.HasSuffix(p, "/snapshot") && r.Method == "GET":
 			w.Write([]byte(`{"data":[{"name":"before-upgrade","snaptime":1760000000,"description":"x\u0007y","parent":""},{"name":"current","parent":"before-upgrade"}]}`))
-		case strings.HasSuffix(p, "/snapshot") || strings.HasSuffix(p, "/rollback") || r.Method == "DELETE":
+		case strings.HasSuffix(p, "/snapshot") || strings.HasSuffix(p, "/rollback") || strings.HasSuffix(p, "/vzdump") || r.Method == "DELETE":
 			if denySnap {
 				w.WriteHeader(403)
 				return
@@ -122,5 +122,26 @@ func TestSnapshotWithoutTheRight(t *testing.T) {
 	_, err := p.RunArg(context.Background(), "snap-create", "101", "s1")
 	if err == nil || !strings.Contains(err.Error(), "VM.Snapshot") {
 		t.Errorf("got %v", err)
+	}
+}
+
+func TestVzdump(t *testing.T) {
+	p, calls := guestFake(t, false)
+	ctx := context.Background()
+	if _, err := p.RunArg(ctx, "vzdump", "101", "local:snapshot"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(*calls, "\n"), "POST /nodes/pve2/vzdump") || !strings.Contains(strings.Join(*calls, "\n"), "storage=local") ||
+		!strings.Contains(strings.Join(*calls, "\n"), "mode=snapshot") {
+		t.Errorf("calls %v", *calls)
+	}
+	if _, err := p.RunArg(ctx, "vzdump", "101", "elsewhere:snapshot"); err == nil {
+		t.Error("a storage that is not one of the node's backup storages")
+	}
+	if _, err := p.RunArg(ctx, "vzdump", "200", "local:snapshot"); err == nil {
+		t.Error("a backup of a guest that is not on this node")
+	}
+	if p.Timeout("vzdump") != BackupTime || !p.TakesArg("vzdump") {
+		t.Error("vzdump takes an argument and a long time")
 	}
 }

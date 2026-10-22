@@ -23,7 +23,7 @@ var Verbs = map[string][]string{
 	"wol":      {"wake"},
 	"terminal": {"shell"},
 	"stacks":   {"deploy", "redeploy", "restart", "down", "show", "read", "validate", "save", "version", "restore"},
-	"pve":      {"start", "shutdown", "reboot", "config", "snap-list", "backup-list", "task-list", "snap-create", "snap-rollback", "snap-delete"},
+	"pve":      {"start", "shutdown", "reboot", "config", "snap-list", "backup-list", "task-list", "snap-create", "snap-rollback", "snap-delete", "vzdump"},
 	"ptero":    {"start", "stop", "restart"},
 }
 
@@ -139,7 +139,8 @@ var (
 	imageArg   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,199}$`)
 	versionArg = regexp.MustCompile(`^[0-9]{1,12}$`)
 	nameArg    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
-	snapArg    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,39}$`) // Proxmox's own rule for a snapshot name
+	vzdumpArg  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}:(snapshot|suspend|stop)$`) // storage:mode
+	snapArg    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,39}$`)                             // Proxmox's own rule for a snapshot name
 )
 
 const MaxPath = 400
@@ -177,6 +178,10 @@ func CheckArg(verb, arg string) error {
 		}
 	case "snap-create", "snap-rollback", "snap-delete":
 		if !snapArg.MatchString(arg) {
+			return ErrNotAllowed
+		}
+	case "vzdump":
+		if !vzdumpArg.MatchString(arg) {
 			return ErrNotAllowed
 		}
 	case "version", "restore":

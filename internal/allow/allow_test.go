@@ -80,3 +80,16 @@ func TestCheckArgSnapshotNames(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckArgVzdump(t *testing.T) {
+	for _, ok := range []string{"local:snapshot", "pbs-main:stop", "nas_1.x:suspend"} {
+		if CheckArg("vzdump", ok) != nil {
+			t.Errorf("vzdump %q refused", ok)
+		}
+	}
+	for _, bad := range []string{"", "local", "local:", "local:full", "-x:stop", "a b:stop", "a;b:stop", "a:stop\n", "../x:stop", ":stop"} {
+		if CheckArg("vzdump", bad) == nil {
+			t.Errorf("vzdump %q allowed", bad)
+		}
+	}
+}

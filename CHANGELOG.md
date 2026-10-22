@@ -4,6 +4,9 @@
 
 ### Added
 
+- **Backing up a guest (Proxmox)**: `pve` verb `vzdump` (`arg` = `storage:mode`, mode `snapshot`, `suspend` or `stop`; the storage must be one of the node's backup storages; zstd; follows the task up to 3 hours). Needs `VM.Backup` and `Datastore.AllocateSpace` on the token (`install-agent.sh --pve-backup`).
+- **Pending updates**: the state carries `updates` `{pending, security, names}` on apt hosts (agent on the host itself): what `apt-get -s upgrade` would install, looked up at most every 30 minutes, nothing installed.
+
 - **A guest's config, snapshots, backups and tasks (Proxmox)**: `pve` read verbs `config` (secret-looking keys shown as `********`), `snap-list`, `backup-list`, `task-list`, and `snap-create` / `snap-rollback` / `snap-delete` (the snapshot's name in `arg`, Proxmox's own shape; the agent follows the Proxmox task to its end, up to 5 minutes). They need `VM.Snapshot` and `Datastore.Audit` on the agent's token, which the installer does not give by default; without them the error names the right.
 
 - **Editing a stack**: `stacks` verbs `read` (the files; every `.env` value shown as `********`), `validate` and `save` (carry `files`; `compose config` in a scratch folder first, `save` writes and does not run `up`), `version` and `restore` (take `arg`, a saved version's id). The files a save or deploy replaces are kept under `.history/<unix time>/`, the last 10. A line saved as `KEY=********` keeps the host's value of `KEY`; one the host does not have is refused.

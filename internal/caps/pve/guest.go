@@ -22,6 +22,8 @@ const (
 	maxStorages = 8
 	// SnapTime: a snapshot of a guest with a lot of RAM or disk may take its time.
 	SnapTime = 5 * time.Minute
+	// BackupTime: a backup of a big guest takes hours; past this the task goes on in Proxmox (see Tasks).
+	BackupTime = 3 * time.Hour
 )
 
 // secretKey: a configuration key whose value never leaves the host.
@@ -29,7 +31,7 @@ var secretKey = regexp.MustCompile(`(?i)pass|secret|token|cicustom|sshkeys|(^|_)
 
 func (p *PVE) TakesArg(verb string) bool {
 	switch verb {
-	case "config", "snap-list", "backup-list", "task-list", "snap-create", "snap-rollback", "snap-delete":
+	case "config", "snap-list", "backup-list", "task-list", "snap-create", "snap-rollback", "snap-delete", "vzdump":
 		return true
 	}
 	return false
@@ -39,6 +41,8 @@ func (p *PVE) Timeout(verb string) time.Duration {
 	switch verb {
 	case "snap-create", "snap-rollback", "snap-delete":
 		return SnapTime
+	case "vzdump":
+		return BackupTime
 	}
 	return 0
 }
@@ -139,6 +143,22 @@ func (p *PVE) RunArg(ctx context.Context, verb, target, arg string) (string, err
 	case "snap-create":
 		form := url.Values{"snapname": {arg}}
 		return "", p.task(ctx, "POST", base+"/snapshot", form, node)
+	case "vzdump":
+		// arg is "storage:mode"; the storage must be one of the node's backup storages
+		storage, mode, _ := strings.Cut(arg, ":")
+		var stores []struct{ Storage string }
+		if err := p.call(ctx, "GET", "/nodes/"+url.PathEscape(node)+"/storage?content=backup", &stores); err != nil {
+			return "", err
+		}
+		found := false
+		for _, s := range stores {
+			found = found || s.Storage == storage
+		}
+		if !found {
+			return "", fmt.Errorf("no backup storage %s on %s", storage, node)
+		}
+		form := url.Values{"vmid": {target}, "storage": {storage}, "mode": {mode}, "compress": {"zstd"}}
+		return "", p.task(ctx, "POST", "/nodes/"+url.PathEscape(node)+"/vzdump", form, node)
 	case "snap-rollback":
 		return "", p.task(ctx, "POST", base+"/snapshot/"+url.PathEscape(arg)+"/rollback", url.Values{}, node)
 	case "snap-delete":

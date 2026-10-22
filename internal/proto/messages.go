@@ -63,6 +63,8 @@ type State struct {
 	// Stacks: the compose projects labhud keeps on this host (the stacks capability)
 	Stacks map[string]map[string]any `json:"stacks,omitempty"`
 	Node   string                    `json:"node,omitempty"` // the Proxmox node, with guests
+	// Updates: the packages apt would upgrade, counted without installing anything ({pending, security, names})
+	Updates map[string]any `json:"updates,omitempty"`
 	// FailedUnits: every systemd unit in the failed state, of any type, ticked or not (null
 	// without systemd, [] when none failed)
 	FailedUnits []string `json:"failed_units"`
