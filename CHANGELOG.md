@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-10-22
+
 ### Added
 
 - **Backing up a guest (Proxmox)**: `pve` verb `vzdump` (`arg` = `storage:mode`, mode `snapshot`, `suspend` or `stop`; the storage must be one of the node's backup storages; zstd; follows the task up to 3 hours). Needs `VM.Backup` and `Datastore.AllocateSpace` on the token (`install-agent.sh --pve-backup`).
@@ -100,6 +102,7 @@ The first version, with labhud 0.1.0 (the agent, the server and the app share a 
 - A Pterodactyl panel with a self-signed certificate: `LABHUD_PTERO_PIN` (its SHA-256) accepts that
   certificate and no other.
 
-[Unreleased]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.1...v0.1.11
 [0.1.1]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Mithrandler/labhud-agent/releases/tag/v0.1.0
