@@ -532,6 +532,9 @@ func (a *Agent) handle(ctx context.Context, s *session, f proto.Frame) error {
 func (a *Agent) run(ctx context.Context, s *session, cmd proto.Command) {
 	res := proto.Result{Type: "result", Cmd: cmd.Cmd}
 	err := a.Allow.Check(cmd.Cap, cmd.Verb, cmd.Target)
+	if err == nil {
+		err = allow.CheckArg(cmd.Verb, cmd.Arg)
+	}
 	var target caps.Cap
 	if err == nil {
 		for _, c := range a.Caps {
@@ -561,6 +564,13 @@ func (a *Agent) run(ctx context.Context, s *session, cmd proto.Command) {
 				} else {
 					out, err = dp.Deploy(cctx, cmd.Verb, cmd.Target, files)
 				}
+				if len(out) > caps.MaxOutput {
+					out = out[len(out)-caps.MaxOutput:]
+				}
+				res.Output = out
+			} else if ar, ok := target.(caps.ArgRunner); ok && ar.TakesArg(cmd.Verb) {
+				var out string
+				out, err = ar.RunArg(cctx, cmd.Verb, cmd.Target, cmd.Arg)
 				if len(out) > caps.MaxOutput {
 					out = out[len(out)-caps.MaxOutput:]
 				}

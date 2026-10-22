@@ -51,25 +51,31 @@ type ImageInfo struct {
 	Created  int64    `json:"created"`
 	Used     int      `json:"used"` // containers (stopped ones too) made from it
 	Dangling bool     `json:"dangling"`
+	UsedBy   []string `json:"used_by,omitempty"` // their names, at most usedByMax
 }
 
 type VolumeInfo struct {
-	Name      string `json:"name"`
-	Driver    string `json:"driver"`
-	Size      int64  `json:"size"` // -1: not known
-	Used      int    `json:"used"`
-	Anonymous bool   `json:"anonymous"` // 64 hex characters: made without a name; the only kind prune-volumes removes
+	Name      string   `json:"name"`
+	Driver    string   `json:"driver"`
+	Size      int64    `json:"size"` // -1: not known
+	Used      int      `json:"used"`
+	Anonymous bool     `json:"anonymous"` // 64 hex characters: made without a name; the only kind prune-volumes removes
+	UsedBy    []string `json:"used_by,omitempty"`
 }
 
 type NetworkInfo struct {
-	Name    string `json:"name"`
-	Driver  string `json:"driver"`
-	Scope   string `json:"scope"`
-	Used    int    `json:"used"` // containers on it
-	Builtin bool   `json:"builtin"`
+	Name    string   `json:"name"`
+	Driver  string   `json:"driver"`
+	Scope   string   `json:"scope"`
+	Used    int      `json:"used"` // containers on it
+	Builtin bool     `json:"builtin"`
+	UsedBy  []string `json:"used_by,omitempty"`
 }
 
-const inventoryMax = 100
+const (
+	inventoryMax = 100
+	usedByMax    = 8
+)
 
 var anonymousVolume = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
@@ -114,15 +120,38 @@ func (d *Docker) inventory(ctx context.Context) (string, error) {
 		return "", err
 	}
 	var boxes []struct {
+		Names           []string
+		ImageID         string
+		Mounts          []struct{ Name string }
 		NetworkSettings struct{ Networks map[string]any }
 	}
 	if err := d.call(ctx, "GET", "/containers/json?all=1", &boxes); err != nil {
 		return "", err
 	}
 	onNet := map[string]int{}
+	byNet, byImage, byVolume := map[string][]string{}, map[string][]string{}, map[string][]string{}
+	add := func(m map[string][]string, key, name string) {
+		if key != "" && name != "" && len(m[key]) < usedByMax {
+			m[key] = append(m[key], name)
+		}
+	}
 	for _, b := range boxes {
+		name := ""
+		if len(b.Names) > 0 {
+			name = strings.TrimPrefix(b.Names[0], "/")
+		}
 		for n := range b.NetworkSettings.Networks {
 			onNet[n]++
+			add(byNet, n, name)
+		}
+		add(byImage, b.ImageID, name)
+		for _, m := range b.Mounts {
+			add(byVolume, m.Name, name)
+		}
+	}
+	for _, l := range []map[string][]string{byNet, byImage, byVolume} {
+		for k := range l {
+			sort.Strings(l[k])
 		}
 	}
 	inv := Inventory{Images: []ImageInfo{}, Volumes: []VolumeInfo{}, Networks: []NetworkInfo{}, More: map[string]int{}}
@@ -138,10 +167,10 @@ func (d *Docker) inventory(ctx context.Context) (string, error) {
 			used = 0
 		}
 		inv.Images = append(inv.Images, ImageInfo{ID: shortID(i.ID), Tags: tags, Size: i.Size, Created: i.Created,
-			Used: used, Dangling: len(tags) == 0})
+			Used: used, Dangling: len(tags) == 0, UsedBy: byImage[i.ID]})
 	}
 	for _, v := range u.Volumes {
-		vi := VolumeInfo{Name: v.Name, Driver: v.Driver, Size: -1, Anonymous: anonymousVolume.MatchString(v.Name)}
+		vi := VolumeInfo{Name: v.Name, Driver: v.Driver, Size: -1, Anonymous: anonymousVolume.MatchString(v.Name), UsedBy: byVolume[v.Name]}
 		if v.UsageData != nil {
 			vi.Size, vi.Used = v.UsageData.Size, int(v.UsageData.RefCount)
 		}
@@ -149,7 +178,7 @@ func (d *Docker) inventory(ctx context.Context) (string, error) {
 	}
 	for _, n := range nets {
 		inv.Networks = append(inv.Networks, NetworkInfo{Name: n.Name, Driver: n.Driver, Scope: n.Scope,
-			Used: onNet[n.Name], Builtin: builtin(n.Name)})
+			Used: onNet[n.Name], Builtin: builtin(n.Name), UsedBy: byNet[n.Name]})
 	}
 	sort.SliceStable(inv.Images, func(a, b int) bool { return inv.Images[a].Size > inv.Images[b].Size })
 	sort.SliceStable(inv.Volumes, func(a, b int) bool { return inv.Volumes[a].Size > inv.Volumes[b].Size })

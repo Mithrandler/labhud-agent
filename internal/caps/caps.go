@@ -25,6 +25,13 @@ type Reader interface {
 	Reads(verb string) bool
 }
 
+// ArgRunner is a capability whose verbs take an argument (docker rm-image, volume-ls): the answer is
+// the output, as a Reader's. The argument has been checked by allow.CheckArg before this.
+type ArgRunner interface {
+	TakesArg(verb string) bool
+	RunArg(ctx context.Context, verb, target, arg string) (string, error)
+}
+
 // MaxOutput bounds what a read verb sends back (a frame stays well under labhud's limit).
 const MaxOutput = 48 << 10
 

@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Objects of the host's Docker**: on the target `images` (ticked on its own) `rm-image`, `rm-network`, `rm-volume` (never forced; a built-in network never), `pull` and `network-inspect`; `inventory` now names, per image, volume and network, the containers that use it (`used_by`). A command may carry `arg`, checked per verb before anything runs.
+- **Browsing a volume, read only**: `volume-ls` and `volume-read` on a target `volume:<name>` (a volume ticked for it). The volume is mounted read only in a helper container that is made, never started, without a network, and removed; a path takes no `..`; a file that looks like a secret shows nothing, a dotenv file only its names; at most 300 entries, 64 KiB of a file.
 - **`docker` `stats`**: one running container's numbers now (CPU in % of one core, memory without the page cache and its
   limit, network and disk totals, processes), a read verb on a ticked container, for labhud's Servers zone. Numbers only.
 

@@ -5,8 +5,10 @@ package allow
 
 import (
 	"errors"
+	"path"
 	"regexp"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/Mithrandler/labhud-agent/internal/proto"
@@ -14,7 +16,8 @@ import (
 
 // Verbs per capability: the same table as labhud's agents.VERBS. Nothing runs a command.
 var Verbs = map[string][]string{
-	"docker":   {"start", "stop", "restart", "update", "logs", "prune", "inspect", "inventory", "prune-dangling", "prune-networks", "prune-volumes", "follow", "stats"},
+	"docker": {"start", "stop", "restart", "update", "logs", "prune", "inspect", "inventory", "prune-dangling", "prune-networks", "prune-volumes", "follow", "stats",
+		"rm-image", "rm-network", "rm-volume", "pull", "network-inspect", "volume-ls", "volume-read"},
 	"systemd":  {"start", "stop", "restart"},
 	"host":     {"reboot", "shutdown", "update"},
 	"wol":      {"wake"},
@@ -26,7 +29,7 @@ var Verbs = map[string][]string{
 
 // Target is the shape of a valid target per capability (labhud's agents.TARGET).
 var Target = map[string]*regexp.Regexp{
-	"docker":   regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`),
+	"docker":   regexp.MustCompile(`^(volume:)?[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`),
 	"systemd":  regexp.MustCompile(`^[A-Za-z0-9:_.@-]{1,250}\.(service|timer|socket|target|mount|path)$`),
 	"host":     regexp.MustCompile(`^host$`),
 	"wol":      regexp.MustCompile(`^[0-9a-f]{2}(:[0-9a-f]{2}){5}$`),
@@ -71,13 +74,29 @@ func (l *List) Check(cap, verb, target string) error {
 	}
 	// the host verbs are for the target "images" (the host's Docker, not a container), and that
 	// target takes nothing else
-	if cap == "docker" && HostVerb(verb) != (target == PruneTarget) {
+	if cap == "docker" && !dockerKinds(verb, target) {
 		return ErrNotAllowed
 	}
 	if cap == "terminal" && target == PruneTarget { // "images" is no container
 		return ErrNotAllowed
 	}
 	return nil
+}
+
+// VolumeTarget: a volume ticked for browsing is the target "volume:<name>"; the two volume verbs are
+// for those targets and for nothing else (a container takes neither, nor does "images").
+const VolumeTarget = "volume:"
+
+// VolumeVerb: a docker verb that reads inside a volume, read only.
+func VolumeVerb(verb string) bool { return verb == "volume-ls" || verb == "volume-read" }
+
+// dockerKinds: the verb and the target are of the same kind (a container, the host's Docker, a volume).
+func dockerKinds(verb, target string) bool {
+	isVolume := strings.HasPrefix(target, VolumeTarget)
+	if VolumeVerb(verb) != isVolume {
+		return false
+	}
+	return isVolume || HostVerb(verb) == (target == PruneTarget)
 }
 
 // PruneTarget: the host's Docker (its images, volumes and networks), ticked in labhud as this
@@ -87,7 +106,8 @@ const PruneTarget = "images"
 // HostVerb: a docker verb about the host's images, volumes and networks, not about a container.
 func HostVerb(verb string) bool {
 	switch verb {
-	case "prune", "prune-dangling", "prune-networks", "prune-volumes", "inventory":
+	case "prune", "prune-dangling", "prune-networks", "prune-volumes", "inventory",
+		"rm-image", "rm-network", "rm-volume", "pull", "network-inspect":
 		return true
 	}
 	return false
@@ -112,4 +132,56 @@ func (l *List) Has(cap string) bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return slices.Contains(l.caps, cap)
+}
+
+// The argument of each verb that takes one (every other verb takes none).
+var (
+	imageArg = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,199}$`)
+	nameArg  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+)
+
+const MaxPath = 400
+
+// CleanPath turns a path in a volume into its plain form ("/", "/a/b"): no "..", no control
+// characters, not too long. An empty path is the root.
+func CleanPath(p string) (string, error) {
+	if len(p) > MaxPath {
+		return "", ErrNotAllowed
+	}
+	for _, r := range p {
+		if r < 32 || r == 127 {
+			return "", ErrNotAllowed
+		}
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." {
+			return "", ErrNotAllowed
+		}
+	}
+	return path.Clean("/" + p), nil
+}
+
+// CheckArg: the argument has the shape its verb takes, and a verb that takes none gets none. The
+// agent checks it as labhud does, before any API is touched.
+func CheckArg(verb, arg string) error {
+	switch verb {
+	case "rm-image", "pull":
+		if !imageArg.MatchString(arg) {
+			return ErrNotAllowed
+		}
+	case "rm-network", "rm-volume", "network-inspect":
+		if !nameArg.MatchString(arg) {
+			return ErrNotAllowed
+		}
+	case "volume-ls", "volume-read":
+		clean, err := CleanPath(arg)
+		if err != nil || (verb == "volume-read" && clean == "/") {
+			return ErrNotAllowed
+		}
+	default:
+		if arg != "" {
+			return ErrNotAllowed
+		}
+	}
+	return nil
 }

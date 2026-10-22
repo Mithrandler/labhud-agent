@@ -106,6 +106,9 @@ type Command struct {
 	Cap    string `json:"cap"`
 	Verb   string `json:"verb"`
 	Target string `json:"target"`
+	// Arg: what a verb that names an object needs besides the target (rm-image: the image;
+	// volume-ls: a path in the volume). Checked per verb before anything runs (allow.CheckArg).
+	Arg string `json:"arg,omitempty"`
 	// Auth: a registry's login for this one docker update (labhud with registries, agent with
 	// the "registry-auth" feature), sealed (seal.go). Used only for an image of that registry.
 	Auth *SealedAuth `json:"auth,omitempty"`
