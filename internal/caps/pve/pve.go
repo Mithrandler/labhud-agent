@@ -56,9 +56,21 @@ func New(apiURL, token, root string) *PVE {
 func (p *PVE) Name() string { return "pve" }
 
 func (p *PVE) call(ctx context.Context, method, path string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, method, p.URL+"/api2/json"+path, nil)
+	return p.callForm(ctx, method, path, nil, out)
+}
+
+// callForm: a call with a form body (Proxmox takes its parameters so).
+func (p *PVE) callForm(ctx context.Context, method, path string, form url.Values, out any) error {
+	var reqBody io.Reader
+	if form != nil {
+		reqBody = strings.NewReader(form.Encode())
+	}
+	req, err := http.NewRequestWithContext(ctx, method, p.URL+"/api2/json"+path, reqBody)
 	if err != nil {
 		return err
+	}
+	if form != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 	req.Header.Set("Authorization", "PVEAPIToken="+p.Token)
 	r, err := p.Client.Do(req)
@@ -66,16 +78,16 @@ func (p *PVE) call(ctx context.Context, method, path string, out any) error {
 		return err
 	}
 	defer r.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(r.Body, 8<<20))
+	raw, _ := io.ReadAll(io.LimitReader(r.Body, 8<<20))
 	if r.StatusCode >= 300 {
 		msg := strings.TrimSpace(r.Status)
 		if r.StatusCode == 401 || r.StatusCode == 403 {
-			msg += " (the token lacks a right: VM.PowerMgmt, VM.Audit, Sys.Audit)"
+			msg += " (the token lacks a right: VM.PowerMgmt, VM.Audit, Sys.Audit; snapshots VM.Snapshot, backups Datastore.Audit)"
 		}
 		return errors.New("proxmox: " + msg)
 	}
 	var env struct{ Data json.RawMessage }
-	if err := json.Unmarshal(body, &env); err != nil {
+	if err := json.Unmarshal(raw, &env); err != nil {
 		return err
 	}
 	if out != nil {
@@ -188,17 +200,25 @@ func (p *PVE) Do(ctx context.Context, verb, target string) error {
 	if err := p.call(ctx, "POST", base+"/"+kind+"/"+target+"/status/"+verb, &upid); err != nil {
 		return err
 	}
-	// Wait for the task while the command may; a shutdown still going at the end is not a failure.
+	return p.wait(ctx, base, upid, false)
+}
+
+// wait follows a task until it stops. A task still going when the command's time is over is no
+// failure for a shutdown (soft), a failure for anything else.
+func (p *PVE) wait(ctx context.Context, base, upid string, strict bool) error {
 	for {
 		select {
 		case <-ctx.Done():
+			if strict {
+				return errors.New("proxmox: the task is still running; see Tasks")
+			}
 			return nil
 		case <-time.After(p.Poll):
 		}
 		var t struct{ Status, ExitStatus string }
 		if err := p.call(ctx, "GET", base+"/tasks/"+url.PathEscape(upid)+"/status", &t); err != nil {
 			if ctx.Err() != nil {
-				return nil
+				continue
 			}
 			return err
 		}

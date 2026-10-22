@@ -1,6 +1,7 @@
 package allow
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Mithrandler/labhud-agent/internal/proto"
@@ -57,5 +58,25 @@ func TestMalformedTargetRefusedEvenIfListed(t *testing.T) {
 	l.Set(proto.Allow{Caps: []string{"docker"}, Targets: map[string][]string{"docker": {"a;rm -rf /"}}})
 	if l.Check("docker", "start", "a;rm -rf /") == nil {
 		t.Error("malformed target allowed")
+	}
+}
+
+func TestCheckArgSnapshotNames(t *testing.T) {
+	for _, ok := range []string{"before-upgrade", "a", "S_1", strings.Repeat("a", 40)} {
+		for _, verb := range []string{"snap-create", "snap-rollback", "snap-delete"} {
+			if CheckArg(verb, ok) != nil {
+				t.Errorf("%s %q refused", verb, ok)
+			}
+		}
+	}
+	for _, bad := range []string{"", "1abc", "-x", "a b", "a;b", "a/../b", strings.Repeat("a", 41), "a\n"} {
+		if CheckArg("snap-create", bad) == nil {
+			t.Errorf("snap-create %q allowed", bad)
+		}
+	}
+	for _, verb := range []string{"config", "snap-list", "backup-list", "task-list"} {
+		if CheckArg(verb, "x") == nil || CheckArg(verb, "") != nil {
+			t.Errorf("%s takes no argument", verb)
+		}
 	}
 }

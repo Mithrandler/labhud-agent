@@ -4,6 +4,8 @@
 
 ### Added
 
+- **A guest's config, snapshots, backups and tasks (Proxmox)**: `pve` read verbs `config` (secret-looking keys shown as `********`), `snap-list`, `backup-list`, `task-list`, and `snap-create` / `snap-rollback` / `snap-delete` (the snapshot's name in `arg`, Proxmox's own shape; the agent follows the Proxmox task to its end, up to 5 minutes). They need `VM.Snapshot` and `Datastore.Audit` on the agent's token, which the installer does not give by default; without them the error names the right.
+
 - **Editing a stack**: `stacks` verbs `read` (the files; every `.env` value shown as `********`), `validate` and `save` (carry `files`; `compose config` in a scratch folder first, `save` writes and does not run `up`), `version` and `restore` (take `arg`, a saved version's id). The files a save or deploy replaces are kept under `.history/<unix time>/`, the last 10. A line saved as `KEY=********` keeps the host's value of `KEY`; one the host does not have is refused.
 - **Objects of the host's Docker**: on the target `images` (ticked on its own) `rm-image`, `rm-network`, `rm-volume` (never forced; a built-in network never), `pull` and `network-inspect`; `inventory` now names, per image, volume and network, the containers that use it (`used_by`). A command may carry `arg`, checked per verb before anything runs.
 - **Browsing a volume, read only**: `volume-ls` and `volume-read` on a target `volume:<name>` (a volume ticked for it). The volume is mounted read only in a helper container that is made, never started, without a network, and removed; a path takes no `..`; a file that looks like a secret shows nothing, a dotenv file only its names; at most 300 entries, 64 KiB of a file.
