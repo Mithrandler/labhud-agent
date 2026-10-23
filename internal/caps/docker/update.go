@@ -105,15 +105,21 @@ func (d *Docker) Watch(ctx context.Context) {
 }
 
 // CheckUpdates asks the registry (through the engine, with its own logins) for the digest of
-// each ticked container's tag, once per image, and compares it with the image's RepoDigests.
-// An image built here or pinned by digest has no answer and is left out.
+// each container's tag, once per image, and compares it with the image's RepoDigests. Every
+// container is checked (a read only, so labhud can show which ones have an update); only the
+// ticked ones can be updated. An image built here or pinned by digest has no answer and is left out.
 func (d *Docker) CheckUpdates(ctx context.Context) {
-	if d.Allow == nil {
-		return
+	var list []struct{ Names []string }
+	if d.call(ctx, "GET", "/containers/json?all=1", &list) != nil {
+		return // keep the last answer
 	}
 	found := map[string]bool{}
 	known := map[string]*bool{} // image reference -> newer in the registry
-	for _, name := range d.Allow.Targets("docker") {
+	for _, c := range list {
+		if len(c.Names) == 0 {
+			continue
+		}
+		name := strings.TrimPrefix(c.Names[0], "/")
 		var c struct {
 			Image  string
 			Config struct{ Image string }

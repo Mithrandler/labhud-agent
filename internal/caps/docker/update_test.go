@@ -63,6 +63,9 @@ func (e *engine) start(t *testing.T) *Docker {
 	}
 	mux := http.NewServeMux()
 	j := func(w http.ResponseWriter, v any) { json.NewEncoder(w).Encode(v) }
+	mux.HandleFunc("GET /containers/json", func(w http.ResponseWriter, r *http.Request) {
+		j(w, []map[string]any{{"Names": []string{"/web"}}, {"Names": []string{}}})
+	})
 	mux.HandleFunc("GET /containers/{name}/json", func(w http.ResponseWriter, r *http.Request) {
 		switch n := r.PathValue("name"); {
 		case n == "web" || n == "oldid0000000000":
@@ -162,17 +165,11 @@ func TestDemuxKeepsAPlainStream(t *testing.T) {
 func TestCheckUpdates(t *testing.T) {
 	d := (&engine{}).start(t)
 	d.Allow = &allow.List{}
-	d.CheckUpdates(t.Context())
-	var st proto.State
-	if d.Fill(t.Context(), &st); st.Containers != nil && st.Containers["web"]["update"] == true {
-		t.Error("nothing ticked, nothing checked")
-	}
-	d.Allow.Set(proto.Allow{Caps: []string{"docker"}, Targets: map[string][]string{"docker": {"web"}}})
-	d.CheckUpdates(t.Context())
+	d.CheckUpdates(t.Context()) // nothing ticked: still read, so labhud can show the update
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if !d.updates["web"] {
-		t.Error("the registry's sha256:bbb is not the image's sha256:aaa: an update")
+		t.Error("the registry's sha256:bbb is not the image's sha256:aaa: an update, ticked or not")
 	}
 }
 
