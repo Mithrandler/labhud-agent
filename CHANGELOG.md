@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- docker: every container is checked for a newer image (a read), not only the ticked ones; updating stays for the ticked ones.
+
 ## [0.1.11] - 2026-10-22
 
 ### Added
