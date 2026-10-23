@@ -2,9 +2,11 @@
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-23
+
 ### Changed
 
-- docker: every container is checked for a newer image (a read), not only the ticked ones; updating stays for the ticked ones.
+- docker: every container is checked for a newer image (a read), not only the ticked ones, so labhud can show which have an update; updating stays for the ticked ones.
 
 ## [0.1.11] - 2026-10-22
 
@@ -106,7 +108,8 @@ The first version, with labhud 0.1.0 (the agent, the server and the app share a 
 - A Pterodactyl panel with a self-signed certificate: `LABHUD_PTERO_PIN` (its SHA-256) accepts that
   certificate and no other.
 
-[Unreleased]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.1...v0.1.11
 [0.1.1]: https://github.com/Mithrandler/labhud-agent/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Mithrandler/labhud-agent/releases/tag/v0.1.0
