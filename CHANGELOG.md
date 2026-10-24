@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-10-24
+
+### Added
+
+- **hello says the machine's address** (`host.mac`): the card the default route leaves by, so that labhud can offer Wake for a host that is off.
+- **pve: `console`** (a stream, like the shell): Proxmox's `termproxy` and its websocket with the same token, for a ticked guest; the size goes a moment after the greeting. Needs VM.Console.
+- **pve: `migrate`**: remote migration of a ticked guest to a peer from `LABHUD_PVE_PEERS` (`name|host[:port]|fingerprint|token|bridge|storage`, several with `;`; a wrong one means no peer and a line in the log). The peers' names, never their address or token, are in the state. Needs VM.Migrate; the target's token needs its own rights. Failure messages never carry the target's token.
+
 ## [0.1.13] - 2026-10-24
 
 ### Added
