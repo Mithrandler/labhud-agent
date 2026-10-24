@@ -37,10 +37,12 @@ type Docker struct {
 	Scan func(ctx context.Context, imageID string) (int, error)
 
 	mu      sync.Mutex
-	updates map[string]bool  // container -> its registry has a newer image (CheckUpdates)
-	busy    map[string]bool  // containers being updated
-	crash   crashes          // events.go
-	usage   map[string]usage // the ticked containers that run (stats.go)
+	updates map[string]bool // container -> its registry has a newer image (CheckUpdates)
+	busy    map[string]bool // containers being updated
+	// container -> the registry digests of a version whose update was undone (not offered again)
+	rejected map[string][]string
+	crash    crashes          // events.go
+	usage    map[string]usage // the ticked containers that run (stats.go)
 }
 
 // New gives nil when there is no socket.

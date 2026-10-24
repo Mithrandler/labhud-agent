@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,7 +31,24 @@ var (
 	CheckFirst = 2 * time.Minute
 	PullMax    = 10 * time.Minute
 	StartWait  = 15 * time.Second
+	// A container with a HEALTHCHECK is given HealthWait (or its label's seconds) to turn healthy
+	// before its update is undone; HealthPoll is how often it is looked at.
+	HealthWait = 120 * time.Second
+	HealthPoll = 2 * time.Second
 )
+
+// healthWaitLabel on a container: the seconds its new version has to turn healthy (5 to 600).
+const healthWaitLabel = "labhud.health-wait"
+
+// healthWindow is how long the new container of an update is given: the old one's label, else HealthWait.
+func healthWindow(old map[string]any) time.Duration {
+	if v, _ := dig(old, "Config", "Labels", healthWaitLabel).(string); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n >= 5 && n <= 600 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return HealthWait
+}
 
 // imageRef: a name to pull by tag ("nginx", "ghcr.io/x/y:1.2"), not an id or a pinned digest.
 var imageRef = regexp.MustCompile(`^[a-z0-9][a-z0-9._/-]*(:[0-9]+)?[a-z0-9._/-]*(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?$`)
@@ -114,7 +132,11 @@ func (d *Docker) CheckUpdates(ctx context.Context) {
 		return // keep the last answer
 	}
 	found := map[string]bool{}
-	known := map[string]*bool{} // image reference -> newer in the registry
+	type verdict struct {
+		newer  *bool
+		digest string
+	}
+	known := map[string]verdict{} // image reference -> newer in the registry
 	for _, c := range list {
 		if len(c.Names) == 0 {
 			continue
@@ -129,9 +151,11 @@ func (d *Docker) CheckUpdates(ctx context.Context) {
 		}
 		ref := c.Config.Image
 		if _, done := known[ref]; !done {
-			known[ref] = d.newer(ctx, ref, c.Image)
+			n, dg := d.newer(ctx, ref, c.Image)
+			known[ref] = verdict{n, dg}
 		}
-		if v := known[ref]; v != nil && *v {
+		// a version that was undone (it did not turn healthy) is not offered again; the next one is
+		if v := known[ref]; v.newer != nil && *v.newer && !d.isRejected(name, v.digest) {
 			found[name] = true
 		}
 	}
@@ -140,20 +164,21 @@ func (d *Docker) CheckUpdates(ctx context.Context) {
 	d.mu.Unlock()
 }
 
-// newer: true when the registry's digest for `ref` is none of the image's, nil when not known.
-func (d *Docker) newer(ctx context.Context, ref, imageID string) *bool {
+// newer: true when the registry's digest for `ref` is none of the image's, nil when not known; the
+// digest is the registry's.
+func (d *Docker) newer(ctx context.Context, ref, imageID string) (*bool, string) {
 	if !pullable(ref) {
-		return nil
+		return nil, ""
 	}
 	var img struct{ RepoDigests []string }
 	if d.send(ctx, "GET", "/images/"+imageID+"/json", nil, &img) != nil || len(img.RepoDigests) == 0 {
-		return nil
+		return nil, ""
 	}
 	var dist struct{ Descriptor struct{ Digest string } }
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if d.send(cctx, "GET", "/distribution/"+ref+"/json", nil, &dist) != nil || dist.Descriptor.Digest == "" {
-		return nil
+		return nil, ""
 	}
 	have := false
 	for _, rd := range img.RepoDigests {
@@ -162,7 +187,7 @@ func (d *Docker) newer(ctx context.Context, ref, imageID string) *bool {
 		}
 	}
 	v := !have
-	return &v
+	return &v, dist.Descriptor.Digest
 }
 
 // --- update: pull, then the container again with the new image ----------------------------
@@ -328,8 +353,9 @@ func (d *Docker) recreate(ctx context.Context, name, ref string, old map[string]
 		return none, err
 	}
 	var img struct {
-		Id     string
-		Config map[string]any
+		Id          string
+		Config      map[string]any
+		RepoDigests []string
 	}
 	if err := d.send(ctx, "GET", "/images/"+ref+"/json", nil, &img); err != nil {
 		return none, err
@@ -366,12 +392,14 @@ func (d *Docker) recreate(ctx context.Context, name, ref string, old map[string]
 		}
 	}
 	if wasRunning {
-		if err := d.started(ctx, made.Id); err != nil {
+		if err := d.started(ctx, made.Id, healthWindow(old)); err != nil {
 			d.restore(oldID, name, wasRunning, made.Id)
-			return none, fmt.Errorf("%w (the old one runs again)", err)
+			d.reject(name, img.RepoDigests)
+			return none, fmt.Errorf("%w (the old one runs again; this version is skipped until a newer one is out)", err)
 		}
 	}
 	from, to := version(oldImg.Config, oldImage), version(img.Config, img.Id)
+	d.reject(name, nil)
 	ev := proto.Event{Cap: "docker", Target: name, Kind: "update", From: from, To: to,
 		Text: fmt.Sprintf("%s updated (%s → %s)", name, from, to)}
 	if err := d.send(ctx, "DELETE", "/containers/"+url.PathEscape(oldID), nil, nil); err != nil {
@@ -409,29 +437,112 @@ func short(id string) string {
 	return id
 }
 
-// started: the new container starts and is still running (not restarting) StartWait later.
-func (d *Docker) started(ctx context.Context, id string) error {
-	if err := d.send(ctx, "POST", "/containers/"+url.PathEscape(id)+"/start", nil, nil); err != nil {
+// started: the new container starts and stays up. With a HEALTHCHECK it is given `wait` to turn
+// healthy (unhealthy, or still starting at the end, is a failure); without one it must still be
+// running (not restarting) StartWait later.
+func (d *Docker) started(ctx context.Context, id string, wait time.Duration) error {
+	path := "/containers/" + url.PathEscape(id)
+	if err := d.send(ctx, "POST", path+"/start", nil, nil); err != nil {
 		return fmt.Errorf("start: %w", err)
-	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(StartWait):
 	}
 	var st struct {
 		State struct {
 			Running, Restarting bool
 			ExitCode            int
+			Health              *struct {
+				Status string
+				Log    []struct{ Output string }
+			}
 		}
 	}
-	if err := d.send(ctx, "GET", "/containers/"+url.PathEscape(id)+"/json", nil, &st); err != nil {
+	look := func() error { return d.send(ctx, "GET", path+"/json", nil, &st) }
+	pause := func(t time.Duration) error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(t):
+			return nil
+		}
+	}
+	if err := look(); err != nil {
 		return err
 	}
-	if !st.State.Running || st.State.Restarting {
-		return fmt.Errorf("the new container does not stay up (exit code %d)", st.State.ExitCode)
+	if st.State.Health == nil || st.State.Health.Status == "none" {
+		if err := pause(StartWait); err != nil {
+			return err
+		}
+		if err := look(); err != nil {
+			return err
+		}
+		if !st.State.Running || st.State.Restarting {
+			return fmt.Errorf("the new container does not stay up (exit code %d)", st.State.ExitCode)
+		}
+		return nil
 	}
-	return nil
+	deadline := time.Now().Add(wait)
+	for {
+		if !st.State.Running || st.State.Restarting {
+			return fmt.Errorf("the new container does not stay up (exit code %d)", st.State.ExitCode)
+		}
+		switch h := st.State.Health; {
+		case h == nil, h.Status == "healthy":
+			return nil
+		case h.Status == "unhealthy":
+			out := ""
+			if n := len(h.Log); n > 0 {
+				out = strings.TrimSpace(h.Log[n-1].Output)
+				if len(out) > 120 {
+					out = out[:120]
+				}
+			}
+			if out != "" {
+				return fmt.Errorf("the new container is unhealthy (%s)", out)
+			}
+			return errors.New("the new container is unhealthy")
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("the new container is not healthy after %gs", wait.Seconds())
+		}
+		if err := pause(HealthPoll); err != nil {
+			return err
+		}
+		if err := look(); err != nil {
+			return err
+		}
+	}
+}
+
+// reject remembers the registry digests of an image that was undone for `name` (none: forget them,
+// an update worked). CheckUpdates does not offer that very version again, so an automatic update
+// does not try it over and over; a newer one has another digest, and the button still tries it.
+func (d *Docker) reject(name string, digests []string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if len(digests) == 0 {
+		delete(d.rejected, name)
+		return
+	}
+	if d.rejected == nil {
+		d.rejected = map[string][]string{}
+	}
+	var only []string
+	for _, rd := range digests {
+		if _, dg, ok := strings.Cut(rd, "@"); ok {
+			only = append(only, dg)
+		}
+	}
+	d.rejected[name] = only
+}
+
+func (d *Docker) isRejected(name, digest string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, dg := range d.rejected[name] {
+		if dg == digest {
+			return true
+		}
+	}
+	return false
 }
 
 // restore: the new container (if any) goes, the old one gets its name back and runs again.

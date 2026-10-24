@@ -24,6 +24,8 @@ type engine struct {
 	created   map[string]any
 	connected []string
 	newRuns   bool     // the new container stays up
+	health    []string // the new container's health status at each look (the last stays); none: no HEALTHCHECK
+	healthOut string   // the output of its last health probe
 	pullErr   string   // an error line in the pull stream
 	auth      []string // the X-Registry-Auth of each pull ("" without one)
 	names     map[string]string
@@ -71,7 +73,16 @@ func (e *engine) start(t *testing.T) *Docker {
 		case n == "web" || n == "oldid0000000000":
 			j(w, old)
 		case n == "newid":
-			j(w, map[string]any{"State": map[string]any{"Running": e.newRuns, "ExitCode": 1}})
+			st := map[string]any{"Running": e.newRuns, "ExitCode": 1}
+			e.mu.Lock()
+			if len(e.health) > 0 {
+				st["Health"] = map[string]any{"Status": e.health[0], "Log": []any{map[string]any{"Output": e.healthOut}}}
+				if len(e.health) > 1 {
+					e.health = e.health[1:]
+				}
+			}
+			e.mu.Unlock()
+			j(w, map[string]any{"State": st})
 		default:
 			w.WriteHeader(404)
 			j(w, map[string]any{"message": "No such container: " + n})
@@ -211,7 +222,7 @@ func TestUpdate(t *testing.T) {
 		bad     bool
 	}{
 		{"ok", true, "", "web updated (old → 1.2)", false},
-		{"does not stay up", false, "", "web: update failed: the new container does not stay up (exit code 1) (the old one runs again)", true},
+		{"does not stay up", false, "", "web: update failed: the new container does not stay up (exit code 1) (the old one runs again; this version is skipped until a newer one is out)", true},
 		{"pull fails", true, "toomanyrequests", "web: update failed: pull nginx:1: toomanyrequests", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -288,5 +299,69 @@ func TestUpdateRefusals(t *testing.T) {
 	}
 	if r, tag := split("registry:5000/a/b"); r != "registry:5000/a/b" || tag != "latest" {
 		t.Errorf("%s %s", r, tag)
+	}
+}
+
+func TestUpdateWaitsForHealth(t *testing.T) {
+	savedWait, savedPoll := HealthWait, HealthPoll
+	HealthWait, HealthPoll = 100*time.Millisecond, 5*time.Millisecond
+	t.Cleanup(func() { HealthWait, HealthPoll = savedWait, savedPoll })
+	for _, tc := range []struct {
+		name   string
+		health []string
+		want   string // the start of the event's text
+		bad    bool
+	}{
+		{"turns healthy", []string{"starting", "starting", "healthy"}, "web updated (old → 1.2)", false},
+		{"unhealthy", []string{"starting", "unhealthy"}, "web: update failed: the new container is unhealthy (curl: connection refused) (the old one runs again", true},
+		{"never healthy", []string{"starting"}, "web: update failed: the new container is not healthy after 0.1s (the old one runs again", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := &engine{newRuns: true, health: tc.health, healthOut: "curl: connection refused\n"}
+			d := e.start(t)
+			got := make(chan proto.Event, 1)
+			d.Send = func(ev proto.Event) { got <- ev }
+			if err := d.Do(t.Context(), "update", "web"); err != nil {
+				t.Fatal(err)
+			}
+			var ev proto.Event
+			select {
+			case ev = <-got:
+			case <-time.After(5 * time.Second):
+				t.Fatal("no event")
+			}
+			if !strings.HasPrefix(ev.Text, tc.want) || ev.Bad != tc.bad || ev.Kind != "update" {
+				t.Fatalf("event %+v, calls:\n%s", ev, e.seen())
+			}
+			calls := e.seen()
+			if tc.bad != strings.Contains(calls, "DELETE /containers/newid?force=1") {
+				t.Errorf("the new container goes exactly when the update is undone:\n%s", calls)
+			}
+			// an undone version is not offered again by the check (so an automatic update leaves it)
+			d.Allow = &allow.List{}
+			d.CheckUpdates(t.Context())
+			d.mu.Lock()
+			offered := d.updates["web"]
+			d.mu.Unlock()
+			// it worked: the engine's fake still says the old image runs, so it is offered; undone: it is not
+			if offered == tc.bad {
+				t.Errorf("offered %v after an update that went bad=%v", offered, tc.bad)
+			}
+		})
+	}
+}
+
+func TestHealthWindow(t *testing.T) {
+	label := func(v string) map[string]any {
+		return map[string]any{"Config": map[string]any{"Labels": map[string]any{healthWaitLabel: v}}}
+	}
+	for v, want := range map[string]time.Duration{"30": 30 * time.Second, " 600 ": 600 * time.Second, "4": HealthWait,
+		"601": HealthWait, "soon": HealthWait, "": HealthWait} {
+		if got := healthWindow(label(v)); got != want {
+			t.Errorf("label %q: %v, want %v", v, got, want)
+		}
+	}
+	if healthWindow(map[string]any{}) != HealthWait {
+		t.Error("no label: the default")
 	}
 }
