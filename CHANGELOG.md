@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-10-24
+
+### Fixed
+
+- 0.1.14 was tagged but its CI failed on a test of the console that waited a fixed time (and read what its fake saw without a lock), so 0.1.14 has no build: this is the same code, with the test made to wait for what it checks. Use 0.1.15.
+
 ## [0.1.14] - 2026-10-24
 
 ### Added

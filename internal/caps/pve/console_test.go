@@ -16,13 +16,18 @@ import (
 )
 
 // consoleFake is a node with one LXC (113) whose termproxy greets with OK and echoes input.
-func consoleFake(t *testing.T, ticket string) (*PVE, *[]string) {
+func consoleFake(t *testing.T, ticket string) (*PVE, func() string) {
 	var mu sync.Mutex
-	got := &[]string{}
+	var got []string
 	note := func(s string) {
 		mu.Lock()
-		*got = append(*got, s)
+		got = append(got, s)
 		mu.Unlock()
+	}
+	seen := func() string {
+		mu.Lock()
+		defer mu.Unlock()
+		return strings.Join(got, "|")
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api2/json/", func(w http.ResponseWriter, r *http.Request) {
@@ -84,11 +89,11 @@ func consoleFake(t *testing.T, ticket string) (*PVE, *[]string) {
 	p.Poll = 10 * time.Millisecond
 	var st proto.State
 	p.Fill(context.Background(), &st)
-	return p, got
+	return p, seen
 }
 
 func TestConsole(t *testing.T) {
-	p, got := consoleFake(t, "PVEVNC:ABC::sig/with+chars=")
+	p, seen := consoleFake(t, "PVEVNC:ABC::sig/with+chars=")
 	if !p.Streams("console") || p.Streams("shell") {
 		t.Fatal("console is the one stream verb")
 	}
@@ -111,16 +116,21 @@ func TestConsole(t *testing.T) {
 	if err != nil || string(buf[:n]) != "ls\r" {
 		t.Fatalf("echo %q %v", buf[:n], err)
 	}
+	waitFor := func(want string) {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			if strings.Contains(seen(), want) {
+				return
+			}
+		}
+		t.Fatalf("missing %q in %q", want, seen())
+	}
+	waitFor("resize 1:100:30:") // the first size goes a moment after the greeting: wait for it, not for a fixed time
 	if err := st.Resize(120, 40); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(600 * time.Millisecond)
-	joined := strings.Join(*got, "|")
-	for _, want := range []string{"resize 1:100:30:", "in 0:3:ls\r", "resize 1:120:40:"} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("missing %q in %q", want, joined)
-		}
-	}
+	waitFor("resize 1:120:40:")
+	waitFor("in 0:3:ls\r")
 	// a long paste goes in pieces, none past inputChunk
 	long := strings.Repeat("x", inputChunk*2+5)
 	if _, err := st.Write([]byte(long)); err != nil {
