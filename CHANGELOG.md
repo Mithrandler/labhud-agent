@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-10-24
+
 ### Added
 
 - **Editing a container (docker)**: read verb `config` (restart policy, published ports, bind mounts and the NAMES of the variables, never a value; says when compose made the container) and `reconfigure` (the change, sealed like a stack file: variables to set or remove, ports, volumes, restart policy). The container is made again from its own settings with the same swap and rollback as an update; a change of the restart policy alone is applied live. A container compose made, the agent's own container, and one whose image name now points to another image than the one running are refused.
