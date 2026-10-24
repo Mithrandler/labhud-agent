@@ -27,6 +27,7 @@ type Config struct {
 	PriceKWh float64 // LABHUD_AGENT_PRICE_KWH
 	PVEURL   string  // LABHUD_PVE_URL (https://localhost:8006)
 	PVEToken string  // LABHUD_PVE_TOKEN: user@realm!name=uuid, made by install.sh
+	PVEPeers string  // LABHUD_PVE_PEERS: the nodes a guest may be moved to (pve.ParsePeers), made by install.sh --pve-peer
 	PteroURL string  // LABHUD_PTERO_URL: the panel
 	PteroKey string  // LABHUD_PTERO_KEY: a client API key
 	PteroPin string  // LABHUD_PTERO_PIN: SHA-256 of the panel's certificate, for a self-signed one
@@ -108,7 +109,7 @@ func Load(dir string) (Config, error) {
 		Dir: dir, URL: strings.TrimRight(get("LABHUD_URL", ""), "/"), Code: get("LABHUD_AGENT_CODE", ""),
 		Name: get("LABHUD_AGENT_NAME", ""), Root: get("LABHUD_AGENT_ROOT", "/"),
 		BaseW: num("LABHUD_AGENT_BASE_W"), PriceKWh: num("LABHUD_AGENT_PRICE_KWH"),
-		PVEURL: get("LABHUD_PVE_URL", "https://localhost:8006"), PVEToken: get("LABHUD_PVE_TOKEN", ""),
+		PVEURL: get("LABHUD_PVE_URL", "https://localhost:8006"), PVEToken: get("LABHUD_PVE_TOKEN", ""), PVEPeers: get("LABHUD_PVE_PEERS", ""),
 		PteroURL: strings.TrimRight(get("LABHUD_PTERO_URL", ""), "/"), PteroKey: get("LABHUD_PTERO_KEY", ""),
 		PteroPin: strings.ToLower(strings.ReplaceAll(get("LABHUD_PTERO_PIN", ""), ":", "")),
 		Releases: get("LABHUD_AGENT_RELEASES", ""), Stacks: get("LABHUD_AGENT_STACKS", ""), Terminal: strings.EqualFold(get("LABHUD_AGENT_TERMINAL", ""), "on"), AutoLabels: labels(get("LABHUD_AGENT_AUTO_LABELS", "")),

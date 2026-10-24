@@ -331,7 +331,7 @@ func (a *Agent) name() string {
 }
 
 func (a *Agent) hello() proto.Hello {
-	h := proto.Host{Hostname: a.name(), Arch: runtime.GOARCH}
+	h := proto.Host{Hostname: a.name(), Arch: runtime.GOARCH, MAC: primaryMAC(a.Cfg.Root)}
 	if b, err := os.ReadFile(filepath.Join(a.Cfg.Root, "etc/os-release")); err == nil {
 		for _, line := range strings.Split(string(b), "\n") {
 			if v, ok := strings.CutPrefix(line, "PRETTY_NAME="); ok {

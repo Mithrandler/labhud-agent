@@ -107,6 +107,11 @@ func detect(ctx context.Context, cfg config.Config, agent *conn.Agent, logger *l
 	}
 	found = append(found, wol.New(cfg.Root))
 	if p := pve.New(cfg.PVEURL, cfg.PVEToken, cfg.Root); p != nil {
+		peers, err := pve.ParsePeers(cfg.PVEPeers)
+		if err != nil {
+			logger.Printf("LABHUD_PVE_PEERS: %v (no migration)", err)
+		}
+		p.Peers = peers
 		found = append(found, p)
 	}
 	if p := ptero.New(cfg.PteroURL, cfg.PteroKey, cfg.PteroPin); p != nil {

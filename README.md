@@ -11,7 +11,7 @@ actions the admin ticked in labhud's ⚙ > Agents — only through the host's ow
 | `systemd` | D-Bus is reachable | start, stop, restart units |
 | `host` | D-Bus is reachable | reboot, shut down, update packages |
 | `wol` | always | wake other machines on the LAN |
-| `pve` | a Proxmox token is set (`LABHUD_PVE_TOKEN`) | start, shut down, reboot VMs and LXCs |
+| `pve` | a Proxmox token is set (`LABHUD_PVE_TOKEN`) | start, shut down, reboot VMs and LXCs; their console (`VM.Console`); move one to a peer node (`LABHUD_PVE_PEERS`, `VM.Migrate`) |
 | `ptero` | a Pterodactyl client key is set (`LABHUD_PTERO_URL`, `LABHUD_PTERO_KEY`; `LABHUD_PTERO_PIN` for a self-signed panel) | start, stop, restart game servers |
 | `scan` | `trivy` or `grype` is in the agent's `PATH` (nothing is downloaded) | count the critical and high CVEs of the ticked containers' images, once a day; scan a new image before an update replaces the old one, if labhud holds back risky updates |
 

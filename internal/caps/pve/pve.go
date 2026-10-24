@@ -30,6 +30,7 @@ type PVE struct {
 	URL, Token string
 	Client     *http.Client
 	Poll       time.Duration // between two looks at a task
+	Peers      []Peer        // the nodes a guest may be moved to (LABHUD_PVE_PEERS)
 
 	mu    sync.Mutex
 	node  string
@@ -82,7 +83,7 @@ func (p *PVE) callForm(ctx context.Context, method, path string, form url.Values
 	if r.StatusCode >= 300 {
 		msg := strings.TrimSpace(r.Status)
 		if r.StatusCode == 401 || r.StatusCode == 403 {
-			msg += " (the token lacks a right: VM.PowerMgmt, VM.Audit, Sys.Audit; snapshots VM.Snapshot, backups Datastore.Audit)"
+			msg += " (the token lacks a right: VM.PowerMgmt, VM.Audit, Sys.Audit; snapshots VM.Snapshot, backups Datastore.Audit, console VM.Console, migration VM.Migrate)"
 		}
 		return errors.New("proxmox: " + msg)
 	}
@@ -176,6 +177,9 @@ func (p *PVE) Fill(ctx context.Context, st *proto.State) {
 		types[id] = r.Type
 	}
 	st.Guests, st.Node = guests, node
+	for _, pr := range p.Peers {
+		st.Peers = append(st.Peers, pr.Name)
+	}
 	p.mu.Lock()
 	p.types = types
 	p.mu.Unlock()

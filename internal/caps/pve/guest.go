@@ -31,7 +31,7 @@ var secretKey = regexp.MustCompile(`(?i)pass|secret|token|cicustom|sshkeys|(^|_)
 
 func (p *PVE) TakesArg(verb string) bool {
 	switch verb {
-	case "config", "snap-list", "backup-list", "task-list", "snap-create", "snap-rollback", "snap-delete", "vzdump":
+	case "config", "snap-list", "backup-list", "task-list", "snap-create", "snap-rollback", "snap-delete", "vzdump", "migrate":
 		return true
 	}
 	return false
@@ -43,6 +43,8 @@ func (p *PVE) Timeout(verb string) time.Duration {
 		return SnapTime
 	case "vzdump":
 		return BackupTime
+	case "migrate":
+		return MigrateTime
 	}
 	return 0
 }
@@ -163,6 +165,8 @@ func (p *PVE) RunArg(ctx context.Context, verb, target, arg string) (string, err
 		return "", p.task(ctx, "POST", base+"/snapshot/"+url.PathEscape(arg)+"/rollback", url.Values{}, node)
 	case "snap-delete":
 		return "", p.task(ctx, "DELETE", base+"/snapshot/"+url.PathEscape(arg), nil, node)
+	case "migrate":
+		return "", p.migrate(ctx, node, kind, base, target, arg)
 	}
 	return "", caps.ErrNoVerb
 }

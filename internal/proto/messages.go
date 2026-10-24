@@ -36,6 +36,8 @@ type Host struct {
 	OS       string `json:"os,omitempty"`
 	Kernel   string `json:"kernel,omitempty"`
 	Arch     string `json:"arch,omitempty"`
+	// MAC: the network card of the default route (what a Wake of this host is sent to)
+	MAC string `json:"mac,omitempty"`
 }
 
 type Hello struct {
@@ -63,6 +65,8 @@ type State struct {
 	// Stacks: the compose projects labhud keeps on this host (the stacks capability)
 	Stacks map[string]map[string]any `json:"stacks,omitempty"`
 	Node   string                    `json:"node,omitempty"` // the Proxmox node, with guests
+	// Peers: the names of the Proxmox nodes a guest may be moved to (the pve capability); never their address or token
+	Peers []string `json:"peers,omitempty"`
 	// Updates: the packages apt would upgrade, counted without installing anything ({pending, security, names})
 	Updates map[string]any `json:"updates,omitempty"`
 	// FailedUnits: every systemd unit in the failed state, of any type, ticked or not (null

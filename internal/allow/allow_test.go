@@ -93,3 +93,19 @@ func TestCheckArgVzdump(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckArgMigrate(t *testing.T) {
+	for _, ok := range []string{"pve:online", "pve2:offline", "a_b-c:online", "pve:online:991"} {
+		if CheckArg("migrate", ok) != nil {
+			t.Errorf("migrate %q refused", ok)
+		}
+	}
+	for _, bad := range []string{"", "pve", "pve:", "pve:live", "PVE:online", "-x:online", "a b:online", "a,host=evil:online", "a:online\n", ":online", "pve:online:99", "pve:online:", "pve:online:9x1", "pve:online:991:992"} {
+		if CheckArg("migrate", bad) == nil {
+			t.Errorf("migrate %q allowed", bad)
+		}
+	}
+	if CheckArg("console", "x") == nil || CheckArg("console", "") != nil {
+		t.Error("console takes no argument")
+	}
+}
