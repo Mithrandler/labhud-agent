@@ -169,7 +169,7 @@ func (d *Docker) Deploy(ctx context.Context, verb, target string, files map[stri
 	ch.apply(create)
 	d.autoLabels(create, name)
 	if _, err := d.swap(ctx, name, old, create, extra); err != nil {
-		return "", fmt.Errorf("%w (the old one runs again, as it was)", err)
+		return "", fmt.Errorf("not applied, the old one runs again: %w", err)
 	}
 	msg := name + " made again with the new settings"
 	if err := d.dropOld(ctx, id); err != nil {

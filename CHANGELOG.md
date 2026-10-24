@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Editing a container (docker)**: read verb `config` (restart policy, published ports, bind mounts and the NAMES of the variables, never a value; says when compose made the container) and `reconfigure` (the change, sealed like a stack file: variables to set or remove, ports, volumes, restart policy). The container is made again from its own settings with the same swap and rollback as an update; a change of the restart policy alone is applied live. A container compose made, the agent's own container, and one whose image name now points to another image than the one running are refused.
+- **An update waits for `healthy`**: a container with a HEALTHCHECK is given 120 s (label `labhud.health-wait`, 5 to 600) to turn healthy, else the update is undone and that version is not offered again until a newer one is out (the button still tries). Without a HEALTHCHECK the old rule stays (still running after 15 s).
+
+### Fixed
+
+- **Update on the containerd image store**: the old image's settings (command, labels, health check, environment it came from) are read before the pull. After it the old image has no name, the engine no longer finds it, and everything it gave was kept as the container's own: a new version kept the old HEALTHCHECK and version label.
+
 ## [0.1.12] - 2026-10-23
 
 ### Changed

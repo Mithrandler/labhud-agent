@@ -349,6 +349,10 @@ func (d *Docker) recreate(ctx context.Context, name, ref string, old map[string]
 	var none proto.Event
 	oldID, _ := old["Id"].(string)
 	oldImage, _ := old["Image"].(string)
+	// read before the pull: the pull takes the tag from this image, and the containerd image store
+	// forgets an image with no name (the settings it gave would be kept as the container's own)
+	var oldImg struct{ Config map[string]any }
+	d.send(ctx, "GET", "/images/"+oldImage+"/json", nil, &oldImg) // gone: nothing to leave out
 	if err := d.pull(ctx, ref, opt.Registry, opt.Login); err != nil {
 		return none, err
 	}
@@ -366,8 +370,6 @@ func (d *Docker) recreate(ctx context.Context, name, ref string, old map[string]
 	if err := d.hold(ctx, name, img.Id, oldImage, opt); err != nil {
 		return none, err
 	}
-	var oldImg struct{ Config map[string]any }
-	d.send(ctx, "GET", "/images/"+oldImage+"/json", nil, &oldImg) // gone: nothing to leave out
 	create, extra := spec(old, ref, oldImg.Config)
 	d.autoLabels(create, name)
 	if stage, err := d.swap(ctx, name, old, create, extra); err != nil {
