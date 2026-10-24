@@ -370,42 +370,64 @@ func (d *Docker) recreate(ctx context.Context, name, ref string, old map[string]
 	d.send(ctx, "GET", "/images/"+oldImage+"/json", nil, &oldImg) // gone: nothing to leave out
 	create, extra := spec(old, ref, oldImg.Config)
 	d.autoLabels(create, name)
-	wasRunning, _ := dig(old, "State", "Running").(bool)
-	keep := name + "-labhud-old"
-	if err := d.send(ctx, "POST", "/containers/"+url.PathEscape(oldID)+"/stop?t=20", nil, nil); err != nil {
-		return none, fmt.Errorf("stop: %w", err)
-	}
-	if err := d.send(ctx, "POST", "/containers/"+url.PathEscape(oldID)+"/rename?name="+url.QueryEscape(keep), nil, nil); err != nil {
-		d.restore(oldID, name, wasRunning, "")
-		return none, fmt.Errorf("rename: %w", err)
-	}
-	var made struct{ Id string }
-	if err := d.send(ctx, "POST", "/containers/create?name="+url.QueryEscape(name), create, &made); err != nil {
-		d.restore(oldID, name, wasRunning, "")
-		return none, fmt.Errorf("create: %w (the old one runs again)", err)
-	}
-	for _, net := range extra {
-		if err := d.send(ctx, "POST", "/networks/"+url.PathEscape(net.name)+"/connect",
-			map[string]any{"Container": made.Id, "EndpointConfig": net.config}, nil); err != nil {
-			d.restore(oldID, name, wasRunning, made.Id)
-			return none, fmt.Errorf("network %s: %w (the old one runs again)", net.name, err)
-		}
-	}
-	if wasRunning {
-		if err := d.started(ctx, made.Id, healthWindow(old)); err != nil {
-			d.restore(oldID, name, wasRunning, made.Id)
+	if stage, err := d.swap(ctx, name, old, create, extra); err != nil {
+		if stage == "start" {
 			d.reject(name, img.RepoDigests)
 			return none, fmt.Errorf("%w (the old one runs again; this version is skipped until a newer one is out)", err)
 		}
+		return none, err
 	}
 	from, to := version(oldImg.Config, oldImage), version(img.Config, img.Id)
 	d.reject(name, nil)
 	ev := proto.Event{Cap: "docker", Target: name, Kind: "update", From: from, To: to,
 		Text: fmt.Sprintf("%s updated (%s → %s)", name, from, to)}
-	if err := d.send(ctx, "DELETE", "/containers/"+url.PathEscape(oldID), nil, nil); err != nil {
-		ev.Text = fmt.Sprintf("%s updated (the old container stays as %s: %v)", name, keep, err)
+	if err := d.dropOld(ctx, oldID); err != nil {
+		ev.Text = fmt.Sprintf("%s updated (the old container stays as %s: %v)", name, name+keepSuffix, err)
 	}
 	return ev, nil
+}
+
+const keepSuffix = "-labhud-old"
+
+// swap puts a new container made from `create` in the place of `old`: the old one is stopped
+// and kept under another name, the new one is made, joined to its other networks and started
+// (and must stay up, or turn healthy). Anything failing puts the old one back as it was; the
+// stage ("stop", "create" or "start") tells where it failed. On success the old one still
+// exists: dropOld removes it.
+func (d *Docker) swap(ctx context.Context, name string, old, create map[string]any, extra []network) (string, error) {
+	oldID, _ := old["Id"].(string)
+	wasRunning, _ := dig(old, "State", "Running").(bool)
+	keep := name + keepSuffix
+	if err := d.send(ctx, "POST", "/containers/"+url.PathEscape(oldID)+"/stop?t=20", nil, nil); err != nil {
+		return "stop", fmt.Errorf("stop: %w", err)
+	}
+	if err := d.send(ctx, "POST", "/containers/"+url.PathEscape(oldID)+"/rename?name="+url.QueryEscape(keep), nil, nil); err != nil {
+		d.restore(oldID, name, wasRunning, "")
+		return "stop", fmt.Errorf("rename: %w", err)
+	}
+	var made struct{ Id string }
+	if err := d.send(ctx, "POST", "/containers/create?name="+url.QueryEscape(name), create, &made); err != nil {
+		d.restore(oldID, name, wasRunning, "")
+		return "create", fmt.Errorf("create: %w (the old one runs again)", err)
+	}
+	for _, net := range extra {
+		if err := d.send(ctx, "POST", "/networks/"+url.PathEscape(net.name)+"/connect",
+			map[string]any{"Container": made.Id, "EndpointConfig": net.config}, nil); err != nil {
+			d.restore(oldID, name, wasRunning, made.Id)
+			return "create", fmt.Errorf("network %s: %w (the old one runs again)", net.name, err)
+		}
+	}
+	if wasRunning {
+		if err := d.started(ctx, made.Id, healthWindow(old)); err != nil {
+			d.restore(oldID, name, wasRunning, made.Id)
+			return "start", err
+		}
+	}
+	return "", nil
+}
+
+func (d *Docker) dropOld(ctx context.Context, oldID string) error {
+	return d.send(ctx, "DELETE", "/containers/"+url.PathEscape(oldID), nil, nil)
 }
 
 // autoLabels puts AutoLabels on a container labhud updates on its own and takes them off one it

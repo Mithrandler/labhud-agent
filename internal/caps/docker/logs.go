@@ -20,7 +20,7 @@ import (
 const LogLines = 200
 
 func (d *Docker) Reads(verb string) bool {
-	return verb == "logs" || verb == "inspect" || verb == "stats" || allow.HostVerb(verb)
+	return verb == "logs" || verb == "inspect" || verb == "config" || verb == "stats" || allow.HostVerb(verb)
 }
 
 // Read gives a container's last lines (stdout and stderr, in order), without colour codes; or,
@@ -31,6 +31,9 @@ func (d *Docker) Read(ctx context.Context, verb, target string) (string, error) 
 	}
 	if verb == "inspect" {
 		return d.inspect(ctx, target)
+	}
+	if verb == "config" {
+		return d.configView(ctx, target)
 	}
 	if verb == "stats" {
 		return d.statsNow(ctx, target)

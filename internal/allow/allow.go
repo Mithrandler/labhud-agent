@@ -16,7 +16,7 @@ import (
 
 // Verbs per capability: the same table as labhud's agents.VERBS. Nothing runs a command.
 var Verbs = map[string][]string{
-	"docker": {"start", "stop", "restart", "update", "logs", "prune", "inspect", "inventory", "prune-dangling", "prune-networks", "prune-volumes", "follow", "stats",
+	"docker": {"start", "stop", "restart", "update", "logs", "prune", "inspect", "config", "reconfigure", "inventory", "prune-dangling", "prune-networks", "prune-volumes", "follow", "stats",
 		"rm-image", "rm-network", "rm-volume", "pull", "network-inspect", "volume-ls", "volume-read"},
 	"systemd":  {"start", "stop", "restart"},
 	"host":     {"reboot", "shutdown", "update"},

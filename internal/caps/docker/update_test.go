@@ -29,6 +29,7 @@ type engine struct {
 	pullErr   string   // an error line in the pull stream
 	auth      []string // the X-Registry-Auth of each pull ("" without one)
 	names     map[string]string
+	sameImage bool // the image name still points to the image the container runs
 }
 
 func (e *engine) log(r *http.Request) {
@@ -62,6 +63,9 @@ func (e *engine) start(t *testing.T) *Docker {
 				"Labels": map[string]any{"maintainer": "nginx"}}},
 		"nginx:1": {"Id": "sha256:new", "RepoDigests": []any{"nginx@sha256:bbb"},
 			"Config": map[string]any{"Labels": map[string]any{"org.opencontainers.image.version": "1.2"}}},
+	}
+	if e.sameImage {
+		images["nginx:1"] = map[string]any{"Id": "sha256:old", "Config": map[string]any{}}
 	}
 	mux := http.NewServeMux()
 	j := func(w http.ResponseWriter, v any) { json.NewEncoder(w).Encode(v) }

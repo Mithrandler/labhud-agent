@@ -23,8 +23,11 @@ func (d *Docker) TakesArg(verb string) bool {
 
 // Timeout: a pull may take minutes; everything else the usual.
 func (d *Docker) Timeout(verb string) time.Duration {
-	if verb == "pull" {
+	switch verb {
+	case "pull":
 		return 10 * time.Minute
+	case "reconfigure": // the container made again, given its health window
+		return HealthWait + StartWait + 90*time.Second
 	}
 	return 0
 }
